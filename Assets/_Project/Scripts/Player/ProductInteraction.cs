@@ -13,7 +13,7 @@ public class ProductInteraction : MonoBehaviour
     public float placementSurfaceOffset = 0.015f;
 
     [Tooltip("Position of the held carton relative to the camera: X right, Y up, Z forward. Negative Y keeps it below the aiming point.")]
-    public Vector3 heldBoxCameraOffset = new Vector3(0f, -0.32f, 0.72f);
+    public Vector3 heldBoxCameraOffset = new Vector3(0f, -0.32f, 1.05f);
 
     private Rigidbody heldProduct;
     private Collider[] productColliders;
