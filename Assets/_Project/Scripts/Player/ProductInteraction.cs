@@ -12,6 +12,9 @@ public class ProductInteraction : MonoBehaviour
     [Tooltip("Small gap above the shelf surface.")]
     public float placementSurfaceOffset = 0.015f;
 
+    [Tooltip("Position of the held carton relative to the camera: X right, Y up, Z forward. Negative Y keeps it below the aiming point.")]
+    public Vector3 heldBoxCameraOffset = new Vector3(0f, -0.32f, 0.72f);
+
     private Rigidbody heldProduct;
     private Collider[] productColliders;
     private bool[] originalColliderStates;
@@ -36,7 +39,16 @@ public class ProductInteraction : MonoBehaviour
             return;
         }
 
-        if (holdPoint != null)
+        if (playerCamera != null)
+        {
+            Transform cam = playerCamera.transform;
+            Vector3 heldPosition = cam.position
+                + cam.right * heldBoxCameraOffset.x
+                + cam.up * heldBoxCameraOffset.y
+                + cam.forward * heldBoxCameraOffset.z;
+            heldProduct.transform.SetPositionAndRotation(heldPosition, cam.rotation);
+        }
+        else if (holdPoint != null)
         {
             heldProduct.transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
         }
@@ -45,9 +57,15 @@ public class ProductInteraction : MonoBehaviour
     public void Interact()
     {
         if (IsHoldingProduct)
-            DropProduct();
-        else
-            TryPickupBox();
+        {
+            // Interact only opens the held carton; it never drops or throws it.
+            ProductBox box = heldProduct.GetComponent<ProductBox>();
+            if (box != null && !box.IsOpen)
+                box.Open();
+            return;
+        }
+
+        TryPickupBox();
     }
 
     /// <summary>Places the held box in the ShelfZone closest to the aimed shelf level.</summary>
