@@ -10,7 +10,7 @@ using UnityEngine;
 public class ShelfZone : MonoBehaviour
 {
     [Header("Detection")]
-    [SerializeField] private string productTag = "Box";
+    [SerializeField] private string productTag = "Product";
 
     [Header("Optional Limit")]
     [Min(0)]
