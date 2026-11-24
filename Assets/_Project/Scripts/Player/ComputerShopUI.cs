@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 
 /// <summary>
@@ -28,11 +29,24 @@ public class ComputerShopUI : MonoBehaviour
     [SerializeField] private float surfaceOffset = 0.045f;
     [SerializeField] private Vector2 panelSize = new Vector2(1200f, 800f);
 
-    private sealed class CartEntry
-    {
-        public ProductData data;
-        public int quantity;
-    }
+    [Header("Click Fixes")]
+    [Tooltip("Objects to hide while the computer is focused (e.g. mobile joystick/look-pad canvases " +
+             "with a full-screen Raycast Target image that steal the clicks).")]
+    [SerializeField] private GameObject[] hideWhileFocused;
+    [Tooltip("Unlock and show the cursor while focused. Turn on only if ComputerInteraction does not already do it.")]
+    [SerializeField] private bool unlockCursorWhileFocused = false;
+    [Tooltip("Higher = a finger can wobble more before a tap turns into a drag (touch screens).")]
+    [SerializeField] private int dragThreshold = 40;
+    [Tooltip("Logs what is under the pointer on every click. Turn off when everything works.")]
+    [SerializeField] private bool debugPointer = false;
+
+    [Header("Delivery Layout")]
+    [Tooltip("How many cartons per row at the delivery point.")]
+    [SerializeField] private int cartonsPerRow = 3;
+    [SerializeField] private float cartonSpacingX = 0.8f;
+    [SerializeField] private float cartonSpacingZ = 0.8f;
+    [Tooltip("Small lift so cartons never spawn inside the floor.")]
+    [SerializeField] private float spawnLift = 0.15f;
 
     private sealed class OrderEntry
     {
@@ -46,8 +60,10 @@ public class ComputerShopUI : MonoBehaviour
     private readonly Dictionary<ProductData, int> cart = new Dictionary<ProductData, int>();
     private readonly List<OrderEntry> orderHistory = new List<OrderEntry>();
     private readonly Dictionary<ProductData, Text> selectedQuantityLabels = new Dictionary<ProductData, Text>();
+    private readonly List<RaycastResult> debugHits = new List<RaycastResult>();
 
     private Canvas canvas;
+    private GraphicRaycaster raycaster;
     private RectTransform pageRoot;
     private Text balanceLabel;
     private Text cartCountLabel;
@@ -59,6 +75,10 @@ public class ComputerShopUI : MonoBehaviour
     private Transform monitorSurfaceTransform;
     private string currentPage = "Store";
 
+    private CursorLockMode previousLockState;
+    private bool previousCursorVisible;
+    private int previousDragThreshold;
+
     private readonly Color ink = new Color(0.08f, 0.11f, 0.14f);
     private readonly Color muted = new Color(0.32f, 0.37f, 0.42f);
     private readonly Color green = new Color(0.04f, 0.52f, 0.38f);
@@ -69,20 +89,128 @@ public class ComputerShopUI : MonoBehaviour
         balance = startingBalance;
         EnsureEventSystem();
         BuildInterface();
-        canvas.gameObject.SetActive(false);
+        if (canvas != null)
+            canvas.gameObject.SetActive(false);
     }
 
     private void Update()
     {
         bool focused = computerInteraction != null && computerInteraction.IsFocused;
-        if (focused == wasFocused)
+
+        if (focused != wasFocused)
+        {
+            wasFocused = focused;
+            if (focused)
+                OnFocusEnter();
+            else
+                OnFocusExit();
+        }
+
+        if (focused && debugPointer)
+            DebugPointerClick();
+    }
+
+    private void OnDisable()
+    {
+        // Make sure we never leave the game with hidden controls or a stuck cursor.
+        if (wasFocused)
+        {
+            wasFocused = false;
+            OnFocusExit();
+        }
+    }
+
+    private void OnFocusEnter()
+    {
+        if (canvas == null || !hasMonitorSurface)
             return;
 
-        wasFocused = focused;
-        canvas.gameObject.SetActive(focused && hasMonitorSurface);
-        if (focused && hasMonitorSurface)
+        // 1) Always give the world-space canvas a valid event camera.
+        //    A null/wrong camera = raycasts never hit anything = dead buttons.
+        Camera cam = computerInteraction.playerCamera != null
+            ? computerInteraction.playerCamera
+            : Camera.main;
+        canvas.worldCamera = cam;
+
+        // 2) Do not ignore graphics that face away from the camera
+        //    (the canvas is rotated 180 degrees on the monitor).
+        if (raycaster != null)
+            raycaster.ignoreReversedGraphics = false;
+
+        // 3) Make taps tolerant to small finger movement inside the ScrollRect.
+        if (EventSystem.current != null)
         {
-            ShowPage(currentPage);
+            previousDragThreshold = EventSystem.current.pixelDragThreshold;
+            EventSystem.current.pixelDragThreshold = dragThreshold;
+        }
+
+        // 4) Hide overlay UI that sits on top of world-space canvases and eats clicks.
+        if (hideWhileFocused != null)
+        {
+            foreach (GameObject go in hideWhileFocused)
+                if (go != null)
+                    go.SetActive(false);
+        }
+
+        // 5) Optional: free the cursor so the pointer position can move.
+        if (unlockCursorWhileFocused)
+        {
+            previousLockState = Cursor.lockState;
+            previousCursorVisible = Cursor.visible;
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+
+        canvas.gameObject.SetActive(true);
+        ShowPage(currentPage);
+    }
+
+    private void OnFocusExit()
+    {
+        if (canvas != null)
+            canvas.gameObject.SetActive(false);
+
+        if (EventSystem.current != null)
+            EventSystem.current.pixelDragThreshold = previousDragThreshold;
+
+        if (hideWhileFocused != null)
+        {
+            foreach (GameObject go in hideWhileFocused)
+                if (go != null)
+                    go.SetActive(true);
+        }
+
+        if (unlockCursorWhileFocused)
+        {
+            Cursor.lockState = previousLockState;
+            Cursor.visible = previousCursorVisible;
+        }
+    }
+
+    private void DebugPointerClick()
+    {
+        bool mouseDown = Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+        bool touchDown = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;
+        if (!mouseDown && !touchDown)
+            return;
+
+        Vector2 pos = touchDown
+            ? Touchscreen.current.primaryTouch.position.ReadValue()
+            : Mouse.current.position.ReadValue();
+
+        PointerEventData data = new PointerEventData(EventSystem.current) { position = pos };
+        debugHits.Clear();
+        EventSystem.current.RaycastAll(data, debugHits);
+
+        if (debugHits.Count == 0)
+        {
+            Debug.Log("[ComputerShopUI] Click at " + pos + " -> NO UI hit. " +
+                "Check worldCamera, canvas direction, and cursor lock.");
+        }
+        else
+        {
+            Debug.Log("[ComputerShopUI] Click at " + pos + " -> first hit: " + debugHits[0].gameObject.name +
+                " (total " + debugHits.Count + ")");
         }
     }
 
@@ -124,8 +252,14 @@ public class ComputerShopUI : MonoBehaviour
             typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
 
         canvas = canvasObject.GetComponent<Canvas>();
+        raycaster = canvasObject.GetComponent<GraphicRaycaster>();
+        raycaster.ignoreReversedGraphics = false;
+        raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
+
         canvas.renderMode = RenderMode.WorldSpace;
-        canvas.worldCamera = computerInteraction != null ? computerInteraction.playerCamera : null;
+        canvas.worldCamera = computerInteraction != null && computerInteraction.playerCamera != null
+            ? computerInteraction.playerCamera
+            : Camera.main;
         canvas.overrideSorting = true;
         canvas.sortingOrder = 50;
 
@@ -211,7 +345,7 @@ public class ComputerShopUI : MonoBehaviour
         CreateText(contentArea, "AVAILABLE PRODUCTS", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
-        GameObject scrollObject = CreateScrollArea(contentArea, new Vector2(0.02f, 0.04f), new Vector2(0.98f, 0.89f),
+        CreateScrollArea(contentArea, new Vector2(0.02f, 0.04f), new Vector2(0.98f, 0.89f),
             out RectTransform content);
         if (productDatabase == null || productDatabase.Products.Count == 0)
         {
@@ -219,6 +353,8 @@ public class ComputerShopUI : MonoBehaviour
                 new Vector2(0.05f, 0.7f), new Vector2(0.95f, 0.9f), TextAnchor.MiddleCenter, muted);
             return;
         }
+
+        selectedQuantityLabels.Clear();
 
         foreach (ProductData data in productDatabase.Products)
         {
@@ -317,6 +453,8 @@ public class ComputerShopUI : MonoBehaviour
     {
         Image row = CreatePanel(parent, "Cart_" + data.productId,
             new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, Color.white);
+        row.raycastTarget = false;
+
         LayoutElement element = row.gameObject.AddComponent<LayoutElement>();
         element.minHeight = 76f;
         element.preferredHeight = 76f;
@@ -371,6 +509,8 @@ public class ComputerShopUI : MonoBehaviour
             OrderEntry order = orderHistory[i];
             Image row = CreatePanel(content, "Order_" + i, new Vector2(0.5f, 0.5f),
                 Vector2.zero, Vector2.zero, Color.white);
+            row.raycastTarget = false;
+
             LayoutElement element = row.gameObject.AddComponent<LayoutElement>();
             element.minHeight = 74f;
             element.preferredHeight = 74f;
@@ -419,6 +559,8 @@ public class ComputerShopUI : MonoBehaviour
 
         balance -= total;
         int cartonIndex = 0;
+        int perRow = Mathf.Max(1, cartonsPerRow);
+
         foreach (KeyValuePair<ProductData, int> entry in cart)
         {
             ProductData data = entry.Key;
@@ -434,24 +576,41 @@ public class ComputerShopUI : MonoBehaviour
 
             for (int i = 0; i < count; i++)
             {
-                ProductBox carton = Instantiate(productBoxPrefab, deliveryPoint.position, deliveryPoint.rotation);
-                carton.SetProduct(data, data.packSize);
+                int column = cartonIndex % perRow;
+                int row = cartonIndex / perRow;
 
-                BoxCollider boxCollider = carton.GetComponent<BoxCollider>();
-                Vector3 size = boxCollider != null ? Vector3.Scale(boxCollider.size, carton.transform.lossyScale) : Vector3.one * 0.5f;
-                int column = cartonIndex % 3;
-                int row = cartonIndex / 3;
-                Vector3 offset = deliveryPoint.right * (column * (size.x + 0.12f))
-                    + deliveryPoint.forward * (row * (size.z + 0.12f));
-                carton.transform.position += offset;
+                // Fixed spacing: never depends on the carton's collider/scale,
+                // so one stretched carton can not push the next one out of the map.
+                Vector3 position = deliveryPoint.position
+                    + deliveryPoint.right * (column * cartonSpacingX)
+                    + deliveryPoint.forward * (row * cartonSpacingZ)
+                    + Vector3.up * spawnLift;
+
+                try
+                {
+                    ProductBox carton = Instantiate(productBoxPrefab, position, deliveryPoint.rotation);
+                    Vector3 scaleBefore = carton.transform.localScale;
+                    carton.SetProduct(data, data.packSize);
+
+                    Debug.Log("[Order] " + data.productName + " #" + (i + 1) +
+                        " | scale before: " + scaleBefore +
+                        " | scale after: " + carton.transform.localScale +
+                        " | pos: " + carton.transform.position);
+                }
+                catch (Exception e)
+                {
+                    // One bad carton must not stop the remaining ones from spawning.
+                    Debug.LogError("[Order] Failed to spawn carton: " + e);
+                }
+
                 cartonIndex++;
             }
         }
 
         cart.Clear();
         RefreshHeader();
-        SetStatus("ORDER CONFIRMED. CARTONS SENT TO THE DELIVERY POINT.");
         ShowPage("Orders");
+        SetStatus("ORDER CONFIRMED. CARTONS SENT TO THE DELIVERY POINT.");
     }
 
     private float CalculateCartTotal()
@@ -480,7 +639,14 @@ public class ComputerShopUI : MonoBehaviour
     private void ClearContent()
     {
         for (int i = contentArea.childCount - 1; i >= 0; i--)
-            Destroy(contentArea.GetChild(i).gameObject);
+        {
+            GameObject child = contentArea.GetChild(i).gameObject;
+            // Destroy() is delayed until the end of the frame. Deactivate and detach first so the
+            // old buttons can never be hit by a raycast (or sit under the new ones) in the meantime.
+            child.SetActive(false);
+            child.transform.SetParent(null, false);
+            Destroy(child);
+        }
     }
 
     private void SetStatus(string message)
