@@ -119,7 +119,7 @@ public class ComputerShopUI : MonoBehaviour
         scaler.scaleFactor = 1f;
 
         Image background = CreatePanel(canvasObject.transform, "ShopBackground",
-            new Vector2(0.5f, 0.5f), Vector2.zero, panelSize, new Color(0.96f, 0.97f, 0.98f, 1f));
+            new Vector2(0.5f, 0.5f), Vector2.zero, panelSize, new Color(0.03f, 0.32f, 0.78f, 1f));
         pageRoot = background.rectTransform;
 
         CreateText(pageRoot, "SUPERMARKET  /  SUPPLY STORE", 28, FontStyle.Bold,
@@ -131,7 +131,7 @@ public class ComputerShopUI : MonoBehaviour
             TextAnchor.MiddleRight, green);
 
         CreateButton(pageRoot, "المتجر", new Vector2(0.035f, 0.835f), new Vector2(0.19f, 0.90f),
-            new Color(0.85f, 0.89f, 0.92f), ink, () => ShowPage("Store"));
+            new Color(1f, 0.82f, 0.12f), new Color(0.04f, 0.10f, 0.20f), () => ShowPage("Store"));
         CreateButton(pageRoot, "السلة", new Vector2(0.205f, 0.835f), new Vector2(0.36f, 0.90f),
             new Color(0.85f, 0.89f, 0.92f), ink, () => ShowPage("Cart"));
         CreateButton(pageRoot, "طلباتي", new Vector2(0.375f, 0.835f), new Vector2(0.53f, 0.90f),
@@ -143,7 +143,7 @@ public class ComputerShopUI : MonoBehaviour
 
         contentArea = CreatePanel(pageRoot, "PageContent",
             new Vector2(0.5f, 0.47f), Vector2.zero, new Vector2(panelSize.x * 0.93f, panelSize.y * 0.65f),
-            new Color(0.91f, 0.93f, 0.95f, 1f)).rectTransform;
+            new Color(0.78f, 0.89f, 1f, 1f)).rectTransform;
 
         statusLabel = CreateText(pageRoot, "", 15, FontStyle.Bold,
             new Vector2(0.035f, 0.035f), new Vector2(0.72f, 0.105f),
@@ -247,7 +247,7 @@ public class ComputerShopUI : MonoBehaviour
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
         CreateButton(contentArea, "عرض طلباتي", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
-            new Color(0.84f, 0.89f, 0.93f), ink, () => ShowPage("Orders"));
+            new Color(1f, 0.82f, 0.12f), new Color(0.04f, 0.10f, 0.20f), () => ShowPage("Orders"));
 
         if (cart.Count == 0)
         {
