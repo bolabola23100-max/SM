@@ -1,15 +1,17 @@
 using UnityEngine;
 
 /// <summary>
-/// Lets the player focus on the monitor of the desktop-computer prefab.
-/// Assign the player camera and PlayerMovement in the Inspector, then assign
-/// this component to HoldInteractionButton so the same InteractButton toggles focus.
+/// Focuses the player camera on the FRONT-CENTER of the computer monitor.
+/// Assign Screen Surface to the monitor's front-facing transform for the
+/// most reliable orientation. The same InteractButton toggles focus on/off.
 /// </summary>
 public class ComputerInteraction : MonoBehaviour
 {
     [Header("References")]
     public Camera playerCamera;
     public PlayerMovement playerMovement;
+    [Tooltip("Optional: assign the monitor's front-facing transform. If empty, the hit collider is used.")]
+    public Transform screenSurface;
 
     [Header("Detection")]
     [Min(0.5f)] public float interactionDistance = 3.5f;
@@ -64,31 +66,37 @@ public class ComputerInteraction : MonoBehaviour
             return false;
 
         Transform computerRoot = hit.collider.transform;
-        while (computerRoot != null &&
-               !computerRoot.name.Contains("SM_Desktop_Computer"))
-        {
+        while (computerRoot != null && !computerRoot.name.Contains("SM_Desktop_Computer"))
             computerRoot = computerRoot.parent;
-        }
 
         if (computerRoot == null)
             return false;
 
-        FocusOnScreen(hit.point);
+        // Use the monitor's full bounds, not the exact pixel/point hit by the ray.
+        // This makes taps aimed at any part of the screen focus the same center point.
+        Transform surface = screenSurface != null ? screenSurface : hit.collider.transform;
+        Bounds screenBounds = hit.collider.bounds;
+        Vector3 screenCenter = screenBounds.center;
+
+        FocusOnScreen(surface, screenCenter);
         return true;
     }
 
-    private void FocusOnScreen(Vector3 screenPoint)
+    private void FocusOnScreen(Transform surface, Vector3 screenCenter)
     {
         Transform cam = playerCamera.transform;
         originalCameraPosition = cam.position;
         originalCameraRotation = cam.rotation;
 
-        Vector3 directionToScreen = (screenPoint - cam.position).normalized;
-        if (directionToScreen.sqrMagnitude < 0.001f)
-            directionToScreen = cam.forward;
+        // The surface's forward axis represents the monitor's outward/front direction.
+        // Flip it when the player is on the opposite side, so the camera never moves behind it.
+        Vector3 front = surface.forward.normalized;
+        if (Vector3.Dot(cam.position - screenCenter, front) < 0f)
+            front = -front;
 
-        targetCameraPosition = screenPoint - directionToScreen * focusDistanceFromScreen;
-        targetCameraRotation = Quaternion.LookRotation(screenPoint - targetCameraPosition, Vector3.up);
+        Vector3 up = surface.up.sqrMagnitude > 0.001f ? surface.up : Vector3.up;
+        targetCameraPosition = screenCenter + front * focusDistanceFromScreen;
+        targetCameraRotation = Quaternion.LookRotation(screenCenter - targetCameraPosition, up);
 
         SetPlayerControl(false);
         isFocused = true;
