@@ -8,6 +8,7 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
     public Camera playerCamera;
     public ProductInteraction productInteraction;
     public FurnitureController furnitureController;
+    public ComputerInteraction computerInteraction;
     public Image holdProgressImage;
 
     [Header("Settings")]
@@ -98,6 +99,10 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
             productInteraction.Interact();
             return;
         }
+
+        // A computer is entered/exited with the same InteractButton.
+        if (computerInteraction != null && computerInteraction.TryInteract())
+            return;
 
         // A box is picked up with a normal tap. Shelf pickup still requires a long press.
         if (IsBoxUnderAim())
