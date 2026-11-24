@@ -91,7 +91,7 @@ public class PlacementChecker : MonoBehaviour
         }
 
         Collider[] hits = Physics.OverlapBox(
-            center, halfExtents, orientation, blockingLayers, QueryTriggerInteraction.Ignore
+            center, halfExtents, orientation, ~0, QueryTriggerInteraction.Ignore
         );
 
         foreach (Collider hit in hits)
@@ -103,16 +103,15 @@ public class PlacementChecker : MonoBehaviour
             if (HasTagInParents(hit.transform, floorTag))
                 continue;
 
-            // Any wall is forbidden, regardless of its layer.
-            if (HasTagInParents(hit.transform, wallTag))
+            // Tagged walls are forbidden even if their layer is not in Blocking Layers.
+            bool isWall = HasTagInParents(hit.transform, wallTag);
+            bool isBlockingLayer = (blockingLayers.value & (1 << hit.gameObject.layer)) != 0;
+
+            if (isWall || isBlockingLayer)
             {
                 shelf.SetPlacementValidity(false);
                 return;
             }
-
-            // Any other collider included in Blocking Layers blocks placement.
-            shelf.SetPlacementValidity(false);
-            return;
         }
 
         shelf.SetPlacementValidity(true);
