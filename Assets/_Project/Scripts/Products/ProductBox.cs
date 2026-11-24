@@ -38,7 +38,8 @@ public class ProductBox : MonoBehaviour
     private Transform rightFlap;
     private Material cartonMaterial;
     private int remainingCount;
-    private Vector3 cartonSize;\n    private float fittedProductWidth;\n    private float fittedProductDepth;
+    private Vector3 cartonSize;
+    private float fittedProductWidth;\n    private float fittedProductDepth;
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
@@ -89,6 +90,8 @@ public class ProductBox : MonoBehaviour
             ? Mathf.Max(1, productData.packSize)
             : Mathf.Max(1, customCount);
 
+        MeasureProductDimensions();
+
         columns = Mathf.Max(1, columns);
         rows = Mathf.Max(1, rows);
 
@@ -97,8 +100,8 @@ public class ProductBox : MonoBehaviour
         int perLayer = columns * rows;
         int layers = Mathf.CeilToInt((float)remainingCount / perLayer);
 
-        float innerX = columns * productFootprint + (columns - 1) * productSpacing;
-        float innerZ = rows * productFootprint + (rows - 1) * productSpacing;
+        float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
+        float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
         float innerY = layers * productHeight;
 
         cartonSize = new Vector3(
