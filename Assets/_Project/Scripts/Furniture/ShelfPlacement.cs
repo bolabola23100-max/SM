@@ -12,8 +12,8 @@ public class ShelfPlacement : MonoBehaviour
     public Collider placementCollider;
 
     [Header("Placement Preview")]
-    [SerializeField] private Color validColor = new Color(0.15f, 1f, 0.25f, 1f);
-    [SerializeField] private Color invalidColor = new Color(1f, 0.12f, 0.12f, 1f);
+    [SerializeField] private Color validColor = new Color(0.15f, 1f, 0.25f, 0.42f);
+    [SerializeField] private Color invalidColor = new Color(1f, 0.12f, 0.12f, 0.42f);
 
     private bool isHeld;
     private bool canPlace;
@@ -23,8 +23,8 @@ public class ShelfPlacement : MonoBehaviour
     private Rigidbody rb;
 
     private Renderer[] shelfRenderers;
-    private MaterialPropertyBlock[] originalPropertyBlocks;
-    private MaterialPropertyBlock previewPropertyBlock;
+    private Material[][] originalMaterials;
+    private Material[][] previewMaterials;
 
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -40,13 +40,25 @@ public class ShelfPlacement : MonoBehaviour
         }
 
         shelfRenderers = GetComponentsInChildren<Renderer>(true);
-        originalPropertyBlocks = new MaterialPropertyBlock[shelfRenderers.Length];
-        previewPropertyBlock = new MaterialPropertyBlock();
+        originalMaterials = new Material[shelfRenderers.Length][];
+        previewMaterials = new Material[shelfRenderers.Length][];
 
+        // Create private transparent material copies. Original project materials are never modified.
         for (int i = 0; i < shelfRenderers.Length; i++)
         {
-            originalPropertyBlocks[i] = new MaterialPropertyBlock();
-            shelfRenderers[i].GetPropertyBlock(originalPropertyBlocks[i]);
+            Material[] sourceMaterials = shelfRenderers[i].sharedMaterials;
+            originalMaterials[i] = sourceMaterials;
+            previewMaterials[i] = new Material[sourceMaterials.Length];
+
+            for (int j = 0; j < sourceMaterials.Length; j++)
+            {
+                if (sourceMaterials[j] == null)
+                    continue;
+
+                Material preview = new Material(sourceMaterials[j]);
+                ConfigureTransparentMaterial(preview);
+                previewMaterials[i][j] = preview;
+            }
         }
     }
 
@@ -61,8 +73,6 @@ public class ShelfPlacement : MonoBehaviour
         if (playerCamera == null)
             return;
 
-        // Project the camera direction onto the horizontal plane.
-        // This keeps the shelf at its pickup height even when the player looks up/down.
         Vector3 flatForward = Vector3.ProjectOnPlane(
             playerCamera.transform.forward,
             Vector3.up
@@ -152,10 +162,20 @@ public class ShelfPlacement : MonoBehaviour
             if (shelfRenderer == null)
                 continue;
 
-            shelfRenderer.GetPropertyBlock(previewPropertyBlock);
-            previewPropertyBlock.SetColor(BaseColorId, previewColor);
-            previewPropertyBlock.SetColor(ColorId, previewColor);
-            shelfRenderer.SetPropertyBlock(previewPropertyBlock);
+            shelfRenderer.sharedMaterials = previewMaterials[i];
+
+            for (int j = 0; j < previewMaterials[i].Length; j++)
+            {
+                Material material = previewMaterials[i][j];
+                if (material == null)
+                    continue;
+
+                Color tint = previewColor;
+                if (material.HasProperty(BaseColorId))
+                    material.SetColor(BaseColorId, tint);
+                if (material.HasProperty(ColorId))
+                    material.SetColor(ColorId, tint);
+            }
         }
     }
 
@@ -164,7 +184,54 @@ public class ShelfPlacement : MonoBehaviour
         for (int i = 0; i < shelfRenderers.Length; i++)
         {
             if (shelfRenderers[i] != null)
-                shelfRenderers[i].SetPropertyBlock(originalPropertyBlocks[i]);
+                shelfRenderers[i].sharedMaterials = originalMaterials[i];
+        }
+    }
+
+    private void ConfigureTransparentMaterial(Material material)
+    {
+        // URP Lit / compatible shaders.
+        if (material.HasProperty("_Surface"))
+            material.SetFloat("_Surface", 1f);
+
+        if (material.HasProperty("_Blend"))
+            material.SetFloat("_Blend", 0f);
+
+        if (material.HasProperty("_SrcBlend"))
+            material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+
+        if (material.HasProperty("_DstBlend"))
+            material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+
+        if (material.HasProperty("_ZWrite"))
+            material.SetInt("_ZWrite", 0);
+
+        // Built-in Standard shader.
+        if (material.HasProperty("_Mode"))
+            material.SetFloat("_Mode", 3f);
+
+        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.DisableKeyword("_ALPHATEST_ON");
+        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        material.EnableKeyword("_ALPHABLEND_ON");
+        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+    }
+
+    private void OnDestroy()
+    {
+        if (previewMaterials == null)
+            return;
+
+        for (int i = 0; i < previewMaterials.Length; i++)
+        {
+            if (previewMaterials[i] == null)
+                continue;
+
+            for (int j = 0; j < previewMaterials[i].Length; j++)
+            {
+                if (previewMaterials[i][j] != null)
+                    Destroy(previewMaterials[i][j]);
+            }
         }
     }
 
