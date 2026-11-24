@@ -90,21 +90,21 @@ public class ComputerShopUI : MonoBehaviour
 
         Image background = CreatePanel(canvasObject.transform, "ShopBackground",
             new Vector2(0.5f, 0.5f), Vector2.zero, panelSize,
-            new Color(0.035f, 0.055f, 0.075f, 0.97f));
+            new Color(0.96f, 0.97f, 0.98f, 1f));
 
         RectTransform root = background.rectTransform;
 
         Text title = CreateText(root, "STORE  /  SUPPLY ORDER", 30, FontStyle.Bold,
             new Vector2(0.04f, 0.91f), new Vector2(0.62f, 0.99f),
-            TextAnchor.MiddleLeft, Color.white);
+            TextAnchor.MiddleLeft, new Color(0.08f, 0.11f, 0.14f));
 
         balanceLabel = CreateText(root, "", 23, FontStyle.Bold,
             new Vector2(0.66f, 0.91f), new Vector2(0.96f, 0.99f),
-            TextAnchor.MiddleRight, new Color(0.35f, 0.9f, 0.72f));
+            TextAnchor.MiddleRight, new Color(0.02f, 0.48f, 0.34f));
 
         CreateText(root, "اختار المنتج وعدد الكراتين، وبعد الشراء هتظهر الكراتين عند نقطة التسليم.",
             16, FontStyle.Normal, new Vector2(0.04f, 0.84f), new Vector2(0.96f, 0.91f),
-            TextAnchor.MiddleLeft, new Color(0.68f, 0.75f, 0.81f));
+            TextAnchor.MiddleLeft, new Color(0.30f, 0.35f, 0.40f));
 
         GameObject scrollObject = new GameObject("ProductsScroll",
             typeof(RectTransform), typeof(Image), typeof(ScrollRect));
@@ -114,7 +114,7 @@ public class ComputerShopUI : MonoBehaviour
         scrollRect.anchorMax = new Vector2(0.96f, 0.82f);
         scrollRect.offsetMin = Vector2.zero;
         scrollRect.offsetMax = Vector2.zero;
-        scrollObject.GetComponent<Image>().color = new Color(0.07f, 0.095f, 0.12f, 1f);
+        scrollObject.GetComponent<Image>().color = new Color(0.88f, 0.91f, 0.94f, 1f);
 
         GameObject viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
         RectTransform viewportRect = viewport.GetComponent<RectTransform>();
@@ -179,7 +179,7 @@ public class ComputerShopUI : MonoBehaviour
     {
         Image row = CreatePanel(parent, "Product_" + data.productId,
             new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero,
-            new Color(0.105f, 0.14f, 0.17f, 1f));
+            new Color(1f, 1f, 1f, 1f));
         LayoutElement rowLayout = row.gameObject.AddComponent<LayoutElement>();
         rowLayout.minHeight = 92f;
         rowLayout.preferredHeight = 92f;
@@ -187,19 +187,19 @@ public class ComputerShopUI : MonoBehaviour
         RectTransform r = row.rectTransform;
         CreateText(r, data.productName + "   •   " + data.category,
             20, FontStyle.Bold, new Vector2(0.025f, 0.52f), new Vector2(0.48f, 0.95f),
-            TextAnchor.MiddleLeft, Color.white);
+            TextAnchor.MiddleLeft, new Color(0.08f, 0.11f, 0.14f));
 
         CreateText(r, "سعر الكرتونة: " + data.PackCost.ToString("0.##") +
             "   |   " + data.packSize + " قطعة",
             15, FontStyle.Normal, new Vector2(0.025f, 0.08f), new Vector2(0.48f, 0.5f),
-            TextAnchor.MiddleLeft, new Color(0.68f, 0.77f, 0.82f));
+            TextAnchor.MiddleLeft, new Color(0.32f, 0.37f, 0.42f));
 
         CreateButton(r, "−", new Vector2(0.56f, 0.2f), new Vector2(0.63f, 0.8f),
             new Color(0.2f, 0.29f, 0.35f), () => ChangeQuantity(data, -1));
 
         Text quantity = CreateText(r, "1", 20, FontStyle.Bold,
             new Vector2(0.635f, 0.2f), new Vector2(0.70f, 0.8f),
-            TextAnchor.MiddleCenter, Color.white);
+            TextAnchor.MiddleCenter, new Color(0.08f, 0.11f, 0.14f));
         quantityLabels[data] = quantity;
 
         CreateButton(r, "+", new Vector2(0.705f, 0.2f), new Vector2(0.775f, 0.8f),
@@ -325,7 +325,7 @@ public class ComputerShopUI : MonoBehaviour
         button.onClick.AddListener(action);
 
         Text text = CreateText(rect, label, 18, FontStyle.Bold,
-            Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, Color.white);
+            Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, new Color(0.08f, 0.11f, 0.14f));
         text.raycastTarget = false;
         return button;
     }
