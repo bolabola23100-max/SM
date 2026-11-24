@@ -1,5 +1,5 @@
 using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// Updates the normal Text component placed in the MobileControls Canvas.
@@ -9,7 +9,7 @@ using UnityEngine.UI;
 public class GameClockUI : MonoBehaviour
 {
     [SerializeField] private DayNightCycle clock;
-    [SerializeField] private Text clockText;
+    [SerializeField] private TextMeshProUGUI clockText;
 
     private void Awake()
     {
@@ -21,7 +21,7 @@ public class GameClockUI : MonoBehaviour
 
         if (clock == null || clockText == null)
         {
-            Debug.LogError("GameClockUI: Assign a DayNightCycle and the MobileControls clock Text.");
+            Debug.LogError("GameClockUI: Assign a DayNightCycle and the MobileControls TextMeshProUGUI.");
             enabled = false;
             return;
         }
