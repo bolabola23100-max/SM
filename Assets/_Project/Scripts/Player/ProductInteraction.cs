@@ -58,14 +58,118 @@ public class ProductInteraction : MonoBehaviour
     {
         if (IsHoldingProduct)
         {
-            // Interact only opens the held carton; it never drops or throws it.
             ProductBox box = heldProduct.GetComponent<ProductBox>();
-            if (box != null && !box.IsOpen)
+            if (box == null) return;
+
+            // First tap opens the carton. Each later tap stocks one product on the aimed shelf.
+            if (!box.IsOpen)
+            {
                 box.Open();
+                return;
+            }
+
+            TryPlaceOneProductFromHeldBox(box);
             return;
         }
 
         TryPickupBox();
+    }
+
+    private bool TryPlaceOneProductFromHeldBox(ProductBox box)
+    {
+        if (box == null || box.IsEmpty || playerCamera == null)
+            return false;
+
+        if (!Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward,
+                out RaycastHit hit, interactionDistance, Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
+            return false;
+
+        ShelfPlacement shelf = hit.collider.GetComponentInParent<ShelfPlacement>();
+        if (shelf == null || shelf.IsHeld())
+            return false;
+
+        ShelfZone zone = FindBestShelfZone(shelf, hit.point);
+        if (zone == null || zone.IsFull)
+            return false;
+
+        ProductData data = box.Data;
+        if (data == null || data.productPrefab == null)
+            return false;
+
+        GameObject product = box.TakeOne();
+        if (product == null)
+            return false;
+
+        product.tag = "Product";
+        product.transform.rotation = Quaternion.Euler(data.rotation);
+
+        Bounds productBounds = GetWorldBounds(product);
+        Vector3 visualCenterOffset = productBounds.center - product.transform.position;
+        Bounds zoneBounds = zone.GetComponent<BoxCollider>().bounds;
+
+        int index = zone.ProductCount;
+        int columns = Mathf.Max(1, data.columns);
+        int rows = Mathf.Max(1, data.rows);
+        int col = index % columns;
+        int row = (index / columns) % rows;
+        int layer = index / (columns * rows);
+
+        float cellWidth = zoneBounds.size.x / columns;
+        float cellDepth = zoneBounds.size.z / rows;
+        float localX = zoneBounds.min.x + cellWidth * (col + 0.5f);
+        float localZ = zoneBounds.min.z + cellDepth * (row + 0.5f);
+        float targetY = zoneBounds.min.y + productBounds.extents.y + placementSurfaceOffset
+            + layer * Mathf.Max(0.01f, data.productHeight);
+
+        Vector3 targetVisualCenter = new Vector3(localX, targetY, localZ) + data.offset;
+        product.transform.position = targetVisualCenter - visualCenterOffset;
+        product.transform.SetParent(zone.transform, true);
+
+        Rigidbody body = product.GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.isKinematic = true;
+            body.useGravity = false;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
+        if (!zone.RegisterProduct(product.transform))
+        {
+            Destroy(product);
+            return false;
+        }
+
+        Debug.Log($"Stocked {data.productName} on {zone.name}. Remaining in carton: {box.RemainingCount}");
+        return true;
+    }
+
+    private static Bounds GetWorldBounds(GameObject target)
+    {
+        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
+        Collider[] colliders = target.GetComponentsInChildren<Collider>(true);
+        Bounds bounds = new Bounds(target.transform.position, Vector3.zero);
+        bool hasBounds = false;
+
+        foreach (Renderer item in renderers)
+        {
+            if (item == null) continue;
+            if (!hasBounds) { bounds = item.bounds; hasBounds = true; }
+            else bounds.Encapsulate(item.bounds);
+        }
+
+        if (!hasBounds)
+        {
+            foreach (Collider item in colliders)
+            {
+                if (item == null || item.isTrigger) continue;
+                if (!hasBounds) { bounds = item.bounds; hasBounds = true; }
+                else bounds.Encapsulate(item.bounds);
+            }
+        }
+
+        return hasBounds ? bounds : new Bounds(target.transform.position, Vector3.one * 0.1f);
     }
 
     /// <summary>Places the held box in the ShelfZone closest to the aimed shelf level.</summary>
