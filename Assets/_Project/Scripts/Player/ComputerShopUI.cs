@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 
 /// <summary>
 /// World-space supply shop displayed on the computer monitor.
@@ -87,17 +88,30 @@ public class ComputerShopUI : MonoBehaviour
 
     private void EnsureEventSystem()
     {
-        EventSystem existing = FindObjectOfType<EventSystem>();
-        if (existing == null)
+        EventSystem eventSystem = FindObjectOfType<EventSystem>();
+        if (eventSystem == null)
         {
-            GameObject eventSystemObject = new GameObject("EventSystem",
-                typeof(EventSystem), typeof(StandaloneInputModule));
+            GameObject eventSystemObject = new GameObject("EventSystem", typeof(EventSystem));
+            eventSystem = eventSystemObject.GetComponent<EventSystem>();
             DontDestroyOnLoad(eventSystemObject);
-            return;
         }
 
-        if (existing.GetComponent<BaseInputModule>() == null)
-            existing.gameObject.AddComponent<StandaloneInputModule>();
+        // This project uses the New Input System (Active Input Handling = Input System).
+        // StandaloneInputModule does not receive its input in that mode.
+        BaseInputModule[] modules = eventSystem.GetComponents<BaseInputModule>();
+        foreach (BaseInputModule module in modules)
+        {
+            if (!(module is InputSystemUIInputModule))
+                Destroy(module);
+        }
+
+        InputSystemUIInputModule inputModule = eventSystem.GetComponent<InputSystemUIInputModule>();
+        if (inputModule == null)
+            inputModule = eventSystem.gameObject.AddComponent<InputSystemUIInputModule>();
+
+        inputModule.AssignDefaultActions();
+        eventSystem.enabled = true;
+        inputModule.enabled = true;
     }
 
     private void BuildInterface()
@@ -171,7 +185,7 @@ public class ComputerShopUI : MonoBehaviour
 
         CreateButton(pageRoot, "EXIT COMPUTER", new Vector2(0.76f, 0.035f), new Vector2(0.965f, 0.11f),
             new Color(0.18f, 0.25f, 0.31f), Color.white,
-            () => { if (computerInteraction != null) computerInteraction.TryInteract(); });
+            () => { if (computerInteraction != null) computerInteraction.ExitComputer(); });
 
         RefreshHeader();
         ShowPage("Store");
