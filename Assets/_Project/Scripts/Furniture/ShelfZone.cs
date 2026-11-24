@@ -78,6 +78,24 @@ public class ShelfZone : MonoBehaviour
         return product != null && products.Contains(product);
     }
 
+    /// <summary>Registers a product placed by the player's stocking interaction.</summary>
+    public bool RegisterProduct(Transform product)
+    {
+        if (product == null || IsFull)
+            return false;
+
+        if (products.Add(product))
+            ProductEntered?.Invoke(this, product);
+
+        return true;
+    }
+
+    public void UnregisterProduct(Transform product)
+    {
+        if (product != null && products.Remove(product))
+            ProductExited?.Invoke(this, product);
+    }
+
     public void SetMaxProducts(int amount)
     {
         maxProducts = Mathf.Max(0, amount);
