@@ -16,12 +16,10 @@ public class ShelfPlacement : MonoBehaviour
 
     private Vector3 originalPosition;
     private Quaternion originalRotation;
-
     private float currentRotation;
-
     private Rigidbody rb;
 
-    void Awake()
+    private void Awake()
     {
         rb = GetComponent<Rigidbody>();
 
@@ -32,19 +30,19 @@ public class ShelfPlacement : MonoBehaviour
         }
     }
 
-    void Update()
+    private void Update()
     {
-        if (!isHeld)
-            return;
-
-        MoveShelf();
+        if (isHeld)
+            MoveShelf();
     }
 
-    void MoveShelf()
+    private void MoveShelf()
     {
-        Vector3 targetPosition =
-            playerCamera.transform.position +
-            playerCamera.transform.forward * moveDistance;
+        if (playerCamera == null)
+            return;
+
+        Vector3 targetPosition = playerCamera.transform.position
+                               + playerCamera.transform.forward * moveDistance;
 
         transform.position = Vector3.Lerp(
             transform.position,
@@ -66,10 +64,10 @@ public class ShelfPlacement : MonoBehaviour
 
         originalPosition = transform.position;
         originalRotation = transform.rotation;
-
         currentRotation = transform.eulerAngles.y;
 
         isHeld = true;
+        canPlace = false;
 
         if (rb != null)
             rb.isKinematic = true;
@@ -77,10 +75,8 @@ public class ShelfPlacement : MonoBehaviour
 
     public void RotateShelf()
     {
-        if (!isHeld)
-            return;
-
-        currentRotation += rotationStep;
+        if (isHeld)
+            currentRotation += rotationStep;
     }
 
     public void ConfirmPlacement()
@@ -89,6 +85,7 @@ public class ShelfPlacement : MonoBehaviour
             return;
 
         isHeld = false;
+        canPlace = false;
 
         if (rb != null)
             rb.isKinematic = true;
@@ -99,10 +96,9 @@ public class ShelfPlacement : MonoBehaviour
         if (!isHeld)
             return;
 
-        transform.position = originalPosition;
-        transform.rotation = originalRotation;
-
+        transform.SetPositionAndRotation(originalPosition, originalRotation);
         isHeld = false;
+        canPlace = false;
     }
 
     public void SetPlacementValidity(bool valid)

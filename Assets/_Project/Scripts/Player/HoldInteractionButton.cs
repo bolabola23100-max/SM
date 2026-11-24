@@ -1,10 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 
-public class HoldInteractionButton :
-    MonoBehaviour,
-    IPointerDownHandler,
-    IPointerUpHandler
+public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
     [Header("References")]
     public Camera playerCamera;
@@ -30,72 +27,59 @@ public class HoldInteractionButton :
             return;
 
         isPressing = false;
-
-        float pressDuration =
-            Time.unscaledTime - pressStartTime;
-
+        float pressDuration = Time.unscaledTime - pressStartTime;
         HandleInteraction(pressDuration);
     }
 
-    void HandleInteraction(float duration)
+    private void HandleInteraction(float duration)
     {
-        // اللاعب ماسك رف بالفعل
+        if (playerCamera == null || productInteraction == null || furnitureController == null)
+            return;
+
+        // A tap while carrying furniture confirms placement when the position is valid.
         if (furnitureController.IsHoldingShelf)
         {
             furnitureController.HoldButton();
             return;
         }
 
-        // اللاعب ماسك منتج بالفعل
+        // A tap while carrying a box drops it.
         if (productInteraction.IsHoldingProduct)
         {
             productInteraction.Interact();
             return;
         }
 
-        // تحديد العنصر أمام اللاعب
-        Ray ray = new Ray(
-            playerCamera.transform.position,
-            playerCamera.transform.forward
-        );
-
         if (!Physics.Raycast(
-            ray,
-            out RaycastHit hit,
-            interactionDistance))
+                playerCamera.transform.position,
+                playerCamera.transform.forward,
+                out RaycastHit hit,
+                interactionDistance,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
             return;
 
-        bool isShelf = HasTagInParents(hit.transform, "Shelf");
-
-        bool isBox = HasTagInParents(hit.transform, "Box");
-
-        bool isProduct = HasTagInParents(hit.transform, "Product");
-
-        // الرف يحتاج ضغط مطول
-        if (isShelf)
+        // Detect shelves by their component, not by a mismatched tag.
+        ShelfPlacement shelf = hit.collider.GetComponentInParent<ShelfPlacement>();
+        if (shelf != null)
         {
             if (duration >= longPressDuration)
-            {
                 furnitureController.HoldButton();
-            }
 
             return;
         }
 
-        // الكرتونة والمنتج بضغطة واحدة
-        if (isBox || isProduct)
-        {
+        // Only boxes are pickup targets. Individual products are deliberately excluded.
+        if (HasTagInParents(hit.collider.transform, "Box"))
             productInteraction.Interact();
-        }
     }
 
-    bool HasTagInParents(Transform target, string tag)
+    private static bool HasTagInParents(Transform target, string tag)
     {
         Transform current = target;
-
         while (current != null)
         {
-            if (current.tag == tag)
+            if (current.CompareTag(tag))
                 return true;
 
             current = current.parent;

@@ -280,19 +280,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 40213422}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 2048202605}
-        m_TargetAssemblyTypeName: ProductInteraction, Assembly-CSharp
-        m_MethodName: Interact
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &40213422
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4425,7 +4413,7 @@ GameObject:
   - component: {fileID: 1563800741}
   m_Layer: 0
   m_Name: Main Camera
-  m_TagString: MainCamera
+  m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -4437,7 +4425,7 @@ AudioListener:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1563800737}
-  m_Enabled: 1
+  m_Enabled: 0
 --- !u!20 &1563800739
 Camera:
   m_ObjectHideFlags: 0
@@ -4445,7 +4433,7 @@ Camera:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1563800737}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_ClearFlags: 1
   m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
@@ -4839,7 +4827,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 2048202606}
         m_TargetAssemblyTypeName: FurnitureController, Assembly-CSharp
         m_MethodName: RotateButton
         m_Mode: 1
@@ -5366,7 +5354,7 @@ GameObject:
   - component: {fileID: 1783931809}
   m_Layer: 0
   m_Name: PlayerCamera
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -6382,7 +6370,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 2048202606}
         m_TargetAssemblyTypeName: FurnitureController, Assembly-CSharp
         m_MethodName: CancelButton
         m_Mode: 1
@@ -6746,7 +6734,7 @@ MonoBehaviour:
   moveSpeed: 4
   gravity: -20
   jumpHeight: 1.2
-  mouseSensitivity: 2
+  mouseSensitivity: 0.05
   touchSensitivity: 0.15
 --- !u!114 &2048202605
 MonoBehaviour:

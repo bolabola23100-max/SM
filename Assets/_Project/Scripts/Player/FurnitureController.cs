@@ -14,39 +14,43 @@ public class FurnitureController : MonoBehaviour
 
     public void HoldButton()
     {
+        if (playerCamera == null)
+            return;
+
         if (heldShelf == null)
         {
             TryPickupShelf();
+            return;
         }
-        else
+
+        if (heldShelf.CanPlace())
         {
-            if (heldShelf.CanPlace())
-            {
-                heldShelf.ConfirmPlacement();
-                heldShelf = null;
-            }
+            heldShelf.ConfirmPlacement();
+            heldShelf = null;
         }
     }
 
-    void TryPickupShelf()
+    private void TryPickupShelf()
     {
-        Ray ray = new Ray(
-            playerCamera.transform.position,
-            playerCamera.transform.forward
-        );
+        if (playerCamera == null)
+            return;
 
-        if (Physics.Raycast(ray, out RaycastHit hit,
-            interactionDistance))
-        {
-            ShelfPlacement shelf =
-                hit.collider.GetComponentInParent<ShelfPlacement>();
+        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
 
-            if (shelf != null)
-            {
-                shelf.PickUp();
-                heldShelf = shelf;
-            }
-        }
+        if (!Physics.Raycast(
+                ray,
+                out RaycastHit hit,
+                interactionDistance,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
+            return;
+
+        ShelfPlacement shelf = hit.collider.GetComponentInParent<ShelfPlacement>();
+        if (shelf == null || shelf.IsHeld())
+            return;
+
+        shelf.PickUp();
+        heldShelf = shelf;
     }
 
     public void RotateButton()
@@ -57,10 +61,10 @@ public class FurnitureController : MonoBehaviour
 
     public void CancelButton()
     {
-        if (heldShelf != null)
-        {
-            heldShelf.CancelPlacement();
-            heldShelf = null;
-        }
+        if (heldShelf == null)
+            return;
+
+        heldShelf.CancelPlacement();
+        heldShelf = null;
     }
 }

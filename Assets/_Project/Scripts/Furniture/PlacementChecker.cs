@@ -12,48 +12,96 @@ public class PlacementChecker : MonoBehaviour
     public float checkInterval = 0.05f;
 
     private float timer;
-
     private Collider shelfCollider;
 
-    void Start()
+    private void Awake()
     {
+        if (shelf == null)
+        {
+            Debug.LogError("PlacementChecker: ShelfPlacement reference is missing.", this);
+            enabled = false;
+            return;
+        }
+
         shelfCollider = shelf.placementCollider;
+        if (shelfCollider == null)
+        {
+            Debug.LogError("PlacementChecker: Placement Collider reference is missing on the shelf.", this);
+            enabled = false;
+        }
     }
 
-    void Update()
+    private void Update()
     {
-        if (shelf == null || !shelf.IsHeld())
+        if (shelf == null || shelfCollider == null)
             return;
 
-        timer += Time.deltaTime;
+        if (!shelf.IsHeld())
+        {
+            timer = 0f;
+            return;
+        }
 
-        if (timer >= checkInterval)
+        timer += Time.deltaTime;
+        if (timer >= Mathf.Max(0.02f, checkInterval))
         {
             timer = 0f;
             CheckPlacement();
         }
     }
 
-    void CheckPlacement()
+    private void CheckPlacement()
     {
-        Bounds bounds = shelfCollider.bounds;
+        if (shelfCollider == null || !shelfCollider.enabled)
+        {
+            shelf.SetPlacementValidity(false);
+            return;
+        }
+
+        Vector3 center;
+        Vector3 halfExtents;
+        Quaternion orientation;
+
+        if (shelfCollider is BoxCollider box)
+        {
+            Vector3 scale = box.transform.lossyScale;
+            Vector3 absoluteScale = new Vector3(
+                Mathf.Abs(scale.x),
+                Mathf.Abs(scale.y),
+                Mathf.Abs(scale.z)
+            );
+
+            center = box.transform.TransformPoint(box.center);
+            halfExtents = Vector3.Scale(box.size * 0.5f, absoluteScale) * 0.95f;
+            orientation = box.transform.rotation;
+        }
+        else
+        {
+            // For non-box colliders, use the world-aligned bounds without applying rotation twice.
+            Bounds bounds = shelfCollider.bounds;
+            center = bounds.center;
+            halfExtents = bounds.extents * 0.95f;
+            orientation = Quaternion.identity;
+        }
+
+        // The shelf is moved through Transform, so synchronize before querying physics.
+        Physics.SyncTransforms();
 
         Collider[] hits = Physics.OverlapBox(
-            bounds.center,
-            bounds.extents * 0.95f,
-            shelf.transform.rotation,
+            center,
+            halfExtents,
+            orientation,
             blockingLayers,
             QueryTriggerInteraction.Ignore
         );
 
         bool valid = true;
-
         foreach (Collider hit in hits)
         {
-            if (hit == shelfCollider)
+            if (hit == null || hit == shelfCollider)
                 continue;
 
-            if (hit.transform.IsChildOf(shelf.transform))
+            if (hit.transform == shelf.transform || hit.transform.IsChildOf(shelf.transform))
                 continue;
 
             valid = false;
@@ -63,15 +111,24 @@ public class PlacementChecker : MonoBehaviour
         shelf.SetPlacementValidity(valid);
     }
 
-    void OnDrawGizmosSelected()
+    private void OnDrawGizmosSelected()
     {
         if (shelf == null || shelf.placementCollider == null)
             return;
 
         Gizmos.color = Color.green;
 
-        Bounds bounds = shelf.placementCollider.bounds;
-
-        Gizmos.DrawWireCube(bounds.center, bounds.size);
+        if (shelf.placementCollider is BoxCollider box)
+        {
+            Matrix4x4 previousMatrix = Gizmos.matrix;
+            Gizmos.matrix = box.transform.localToWorldMatrix;
+            Gizmos.DrawWireCube(box.center, box.size);
+            Gizmos.matrix = previousMatrix;
+        }
+        else
+        {
+            Bounds bounds = shelf.placementCollider.bounds;
+            Gizmos.DrawWireCube(bounds.center, bounds.size);
+        }
     }
 }
