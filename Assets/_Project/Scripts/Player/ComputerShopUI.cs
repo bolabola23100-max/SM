@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 /// <summary>
 /// World-space supply shop displayed on the computer monitor.
@@ -66,6 +66,7 @@ public class ComputerShopUI : MonoBehaviour
     private void Awake()
     {
         balance = startingBalance;
+        EnsureEventSystem();
         BuildInterface();
         canvas.gameObject.SetActive(false);
     }
@@ -82,6 +83,21 @@ public class ComputerShopUI : MonoBehaviour
         {
             ShowPage(currentPage);
         }
+    }
+
+    private void EnsureEventSystem()
+    {
+        EventSystem existing = FindObjectOfType<EventSystem>();
+        if (existing == null)
+        {
+            GameObject eventSystemObject = new GameObject("EventSystem",
+                typeof(EventSystem), typeof(StandaloneInputModule));
+            DontDestroyOnLoad(eventSystemObject);
+            return;
+        }
+
+        if (existing.GetComponent<BaseInputModule>() == null)
+            existing.gameObject.AddComponent<StandaloneInputModule>();
     }
 
     private void BuildInterface()
@@ -134,11 +150,11 @@ public class ComputerShopUI : MonoBehaviour
             new Vector2(0.66f, 0.91f), new Vector2(0.965f, 0.99f),
             TextAnchor.MiddleRight, green);
 
-        CreateButton(pageRoot, "المتجر", new Vector2(0.035f, 0.835f), new Vector2(0.19f, 0.90f),
+        CreateButton(pageRoot, "STORE", new Vector2(0.035f, 0.835f), new Vector2(0.19f, 0.90f),
             new Color(1f, 0.82f, 0.12f), new Color(0.04f, 0.10f, 0.20f), () => ShowPage("Store"));
-        CreateButton(pageRoot, "السلة", new Vector2(0.205f, 0.835f), new Vector2(0.36f, 0.90f),
+        CreateButton(pageRoot, "CART", new Vector2(0.205f, 0.835f), new Vector2(0.36f, 0.90f),
             new Color(0.85f, 0.89f, 0.92f), ink, () => ShowPage("Cart"));
-        CreateButton(pageRoot, "طلباتي", new Vector2(0.375f, 0.835f), new Vector2(0.53f, 0.90f),
+        CreateButton(pageRoot, "MY ORDERS", new Vector2(0.375f, 0.835f), new Vector2(0.53f, 0.90f),
             new Color(0.85f, 0.89f, 0.92f), ink, () => ShowPage("Orders"));
 
         cartCountLabel = CreateText(pageRoot, "", 24, FontStyle.Bold,
@@ -153,7 +169,7 @@ public class ComputerShopUI : MonoBehaviour
             new Vector2(0.035f, 0.035f), new Vector2(0.72f, 0.105f),
             TextAnchor.MiddleLeft, new Color(0.55f, 0.34f, 0.05f));
 
-        CreateButton(pageRoot, "إغلاق الكمبيوتر", new Vector2(0.76f, 0.035f), new Vector2(0.965f, 0.11f),
+        CreateButton(pageRoot, "EXIT COMPUTER", new Vector2(0.76f, 0.035f), new Vector2(0.965f, 0.11f),
             new Color(0.18f, 0.25f, 0.31f), Color.white,
             () => { if (computerInteraction != null) computerInteraction.TryInteract(); });
 
@@ -178,14 +194,14 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildStorePage()
     {
-        CreateText(contentArea, "المنتجات المتاحة", 32, FontStyle.Bold,
+        CreateText(contentArea, "AVAILABLE PRODUCTS", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
         GameObject scrollObject = CreateScrollArea(contentArea, new Vector2(0.02f, 0.04f), new Vector2(0.98f, 0.89f),
             out RectTransform content);
         if (productDatabase == null || productDatabase.Products.Count == 0)
         {
-            CreateText(content, "مفيش منتجات في Product Database.", 28, FontStyle.Bold,
+            CreateText(content, "NO PRODUCTS FOUND IN PRODUCT DATABASE.", 28, FontStyle.Bold,
                 new Vector2(0.05f, 0.7f), new Vector2(0.95f, 0.9f), TextAnchor.MiddleCenter, muted);
             return;
         }
@@ -213,7 +229,7 @@ public class ComputerShopUI : MonoBehaviour
         RectTransform r = row.rectTransform;
         CreateText(r, data.productName + "  |  " + data.category, 28, FontStyle.Bold,
             new Vector2(0.025f, 0.55f), new Vector2(0.52f, 0.94f), TextAnchor.MiddleLeft, ink);
-        CreateText(r, "سعر الكرتونة: " + data.PackCost.ToString("0.##") + "  •  " + data.packSize + " قطعة",
+        CreateText(r, "CARTON PRICE: " + data.PackCost.ToString("0.##") + "  •  " + data.packSize + " units",
             22, FontStyle.Normal, new Vector2(0.025f, 0.08f), new Vector2(0.52f, 0.50f),
             TextAnchor.MiddleLeft, muted);
 
@@ -226,7 +242,7 @@ public class ComputerShopUI : MonoBehaviour
         CreateButton(r, "+", new Vector2(0.695f, 0.20f), new Vector2(0.755f, 0.80f),
             new Color(0.86f, 0.89f, 0.92f), ink, () => ChangeSelectedQuantity(data, 1));
 
-        CreateButton(r, "إضافة للسلة", new Vector2(0.78f, 0.16f), new Vector2(0.975f, 0.84f),
+        CreateButton(r, "ADD TO CART", new Vector2(0.78f, 0.16f), new Vector2(0.975f, 0.84f),
             green, Color.white, () => AddToCart(data));
     }
 
@@ -247,15 +263,15 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildCartPage()
     {
-        CreateText(contentArea, "سلة المشتريات", 32, FontStyle.Bold,
+        CreateText(contentArea, "SHOPPING CART", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
-        CreateButton(contentArea, "عرض طلباتي", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
+        CreateButton(contentArea, "عرض MY ORDERS", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
             new Color(1f, 0.82f, 0.12f), new Color(0.04f, 0.10f, 0.20f), () => ShowPage("Orders"));
 
         if (cart.Count == 0)
         {
-            CreateText(contentArea, "السلة فاضية. ارجع للمتجر واضف المنتجات اللي محتاجها.",
+            CreateText(contentArea, "CART فاضية. ارجع للمتجر واضف المنتجات اللي محتاجها.",
                 27, FontStyle.Bold, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.72f),
                 TextAnchor.MiddleCenter, muted);
             return;
@@ -271,10 +287,10 @@ public class ComputerShopUI : MonoBehaviour
         }
 
         float total = CalculateCartTotal();
-        CreateText(contentArea, "إجمالي السلة: " + total.ToString("0.##"),
+        CreateText(contentArea, "إجمالي CART: " + total.ToString("0.##"),
             20, FontStyle.Bold, new Vector2(0.03f, 0.08f), new Vector2(0.55f, 0.18f),
             TextAnchor.MiddleLeft, ink);
-        CreateButton(contentArea, "شراء الطلب", new Vector2(0.70f, 0.055f), new Vector2(0.975f, 0.18f),
+        CreateButton(contentArea, "PLACE ORDER", new Vector2(0.70f, 0.055f), new Vector2(0.975f, 0.18f),
             green, Color.white, PlaceOrder);
     }
 
@@ -289,7 +305,7 @@ public class ComputerShopUI : MonoBehaviour
         RectTransform r = row.rectTransform;
         CreateText(r, data.productName + "  ×  " + amount, 27, FontStyle.Bold,
             new Vector2(0.025f, 0.15f), new Vector2(0.55f, 0.85f), TextAnchor.MiddleLeft, ink);
-        CreateText(r, "الإجمالي: " + (data.PackCost * amount).ToString("0.##"),
+        CreateText(r, "TOTAL: " + (data.PackCost * amount).ToString("0.##"),
             24, FontStyle.Normal, new Vector2(0.56f, 0.15f), new Vector2(0.80f, 0.85f),
             TextAnchor.MiddleCenter, muted);
         CreateButton(r, "−", new Vector2(0.83f, 0.18f), new Vector2(0.89f, 0.82f),
@@ -314,15 +330,15 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildOrdersPage()
     {
-        CreateText(contentArea, "طلباتي السابقة", 32, FontStyle.Bold,
+        CreateText(contentArea, "ORDER HISTORY", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
-        CreateButton(contentArea, "الرجوع للسلة", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
+        CreateButton(contentArea, "BACK TO CART", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
             new Color(0.84f, 0.89f, 0.93f), ink, () => ShowPage("Cart"));
 
         if (orderHistory.Count == 0)
         {
-            CreateText(contentArea, "لسه مفيش طلبات تم شراؤها.", 27, FontStyle.Bold,
+            CreateText(contentArea, "NO PURCHASED ORDERS YET.", 27, FontStyle.Bold,
                 new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.72f),
                 TextAnchor.MiddleCenter, muted);
             return;
@@ -354,21 +370,21 @@ public class ComputerShopUI : MonoBehaviour
     {
         if (cart.Count == 0)
         {
-            SetStatus("السلة فاضية.");
+            SetStatus("CART فاضية.");
             return;
         }
 
         if (productBoxPrefab == null || deliveryPoint == null)
         {
-            SetStatus("اربط Product Box Prefab و Delivery Point في Inspector.");
+            SetStatus("ASSIGN PRODUCT BOX PREFAB AND DELIVERY POINT IN THE INSPECTOR.");
             return;
         }
 
         float total = CalculateCartTotal();
         if (balance < total)
         {
-            SetStatus("رصيدك مش كافي. محتاج " + total.ToString("0.##") +
-                " ورصيدك " + balance.ToString("0.##") + ".");
+            SetStatus("INSUFFICIENT FUNDS. REQUIRED: " + total.ToString("0.##") +
+                " | AVAILABLE: " + balance.ToString("0.##") + ".");
             return;
         }
 
@@ -377,7 +393,7 @@ public class ComputerShopUI : MonoBehaviour
         {
             if (entry.Key == null || entry.Key.productPrefab == null || entry.Value <= 0)
             {
-                SetStatus("في منتج غير صالح في السلة. احذفه وحاول تاني.");
+                SetStatus("في منتج غير صالح في CART. احذفه وحاول تاني.");
                 return;
             }
         }
@@ -415,7 +431,7 @@ public class ComputerShopUI : MonoBehaviour
 
         cart.Clear();
         RefreshHeader();
-        SetStatus("تم تأكيد الطلب ووصول الكراتين لنقطة التسليم.");
+        SetStatus("ORDER CONFIRMED. CARTONS SENT TO THE DELIVERY POINT.");
         ShowPage("Orders");
     }
 
@@ -431,14 +447,14 @@ public class ComputerShopUI : MonoBehaviour
     private void RefreshHeader()
     {
         if (balanceLabel != null)
-            balanceLabel.text = "الرصيد: " + balance.ToString("0.##");
+            balanceLabel.text = "BALANCE: " + balance.ToString("0.##");
 
         if (cartCountLabel != null)
         {
             int count = 0;
             foreach (int value in cart.Values)
                 count += value;
-            cartCountLabel.text = "عدد الكراتين في السلة: " + count;
+            cartCountLabel.text = "عدد الكراتين في CART: " + count;
         }
     }
 
@@ -557,6 +573,7 @@ public class ComputerShopUI : MonoBehaviour
 
         Image image = go.GetComponent<Image>();
         image.color = background;
+        image.raycastTarget = true;
         Button button = go.GetComponent<Button>();
         button.targetGraphic = image;
         button.onClick.AddListener(action);
