@@ -39,7 +39,8 @@ public class ProductBox : MonoBehaviour
     private Material cartonMaterial;
     private int remainingCount;
     private Vector3 cartonSize;
-    private float fittedProductWidth;\n    private float fittedProductDepth;
+    private float fittedProductWidth;
+    private float fittedProductDepth;
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
