@@ -84,6 +84,7 @@ public class DayNightCycle : MonoBehaviour
     private Light moon;
     private float[] nightLightBaseIntensities;
     private Material runtimeSkybox;
+    private Material originalSkybox;
     private bool ownsRuntimeSkybox;
 
     private readonly LightingKey[] keys =
@@ -140,6 +141,7 @@ public class DayNightCycle : MonoBehaviour
         {
             TimeOfDay = endHour;
             ApplyLighting();
+            EmitClockChanges(false);
             TimeOver();
             return;
         }
@@ -151,7 +153,11 @@ public class DayNightCycle : MonoBehaviour
     private void OnDestroy()
     {
         if (ownsRuntimeSkybox && runtimeSkybox != null)
+        {
+            if (RenderSettings.skybox == runtimeSkybox)
+                RenderSettings.skybox = originalSkybox;
             Destroy(runtimeSkybox);
+        }
     }
 
     private void CreateMoon()
@@ -184,6 +190,8 @@ public class DayNightCycle : MonoBehaviour
     {
         if (skyboxMaterial == null)
             skyboxMaterial = RenderSettings.skybox;
+
+        originalSkybox = RenderSettings.skybox;
 
         if (skyboxMaterial != null)
         {
