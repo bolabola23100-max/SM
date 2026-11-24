@@ -38,7 +38,7 @@ public class ProductBox : MonoBehaviour
     private Transform rightFlap;
     private Material cartonMaterial;
     private int remainingCount;
-    private Vector3 cartonSize;
+    private Vector3 cartonSize;\n    private float fittedProductWidth;\n    private float fittedProductDepth;
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
@@ -147,6 +147,56 @@ public class ProductBox : MonoBehaviour
         BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
     }
 
+
+    // Read the actual visible size of the selected product prefab, including its scale
+    // and the rotation used when it is displayed inside the carton.
+    private void MeasureProductDimensions()
+    {
+        GameObject sample = Instantiate(productData.productPrefab);
+        sample.hideFlags = HideFlags.HideAndDontSave;
+        sample.transform.position = Vector3.zero;
+        sample.transform.rotation = Quaternion.Euler(productData.rotation);
+
+        Renderer[] renderers = sample.GetComponentsInChildren<Renderer>(true);
+        Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
+        bool hasBounds = false;
+
+        foreach (Renderer itemRenderer in renderers)
+        {
+            if (itemRenderer == null)
+                continue;
+
+            if (!hasBounds)
+            {
+                bounds = itemRenderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(itemRenderer.bounds);
+            }
+        }
+
+        if (hasBounds)
+        {
+            fittedProductWidth = Mathf.Max(0.01f, bounds.size.x);
+            fittedProductDepth = Mathf.Max(0.01f, bounds.size.z);
+            productHeight = Mathf.Max(0.01f, bounds.size.y);
+        }
+        else
+        {
+            fittedProductWidth = productFootprint;
+            fittedProductDepth = productFootprint;
+            productHeight = Mathf.Max(0.01f, productHeight);
+            Debug.LogWarning("Product prefab has no Renderer; using the fallback carton dimensions.", productData);
+        }
+
+        if (Application.isPlaying)
+            Destroy(sample);
+        else
+            DestroyImmediate(sample);
+    }
+
     private void BuildProductDisplays(int cols, int rowCount, int layers,
         float innerX, float innerZ, float innerY, int perLayer)
     {
@@ -162,9 +212,9 @@ public class ProductBox : MonoBehaviour
             int row = indexInLayer / cols;
 
             Vector3 localPosition = new Vector3(
-                -innerX * 0.5f + productFootprint * 0.5f + col * (productFootprint + productSpacing),
+                -innerX * 0.5f + fittedProductWidth * 0.5f + col * (fittedProductWidth + productSpacing),
                 -cartonSize.y * 0.5f + wallThickness + padding + productHeight * (layer + 0.5f),
-                -innerZ * 0.5f + productFootprint * 0.5f + row * (productFootprint + productSpacing));
+                -innerZ * 0.5f + fittedProductDepth * 0.5f + row * (fittedProductDepth + productSpacing));
 
             display.transform.localPosition = localPosition;
             display.transform.localRotation = Quaternion.Euler(productData.rotation);
