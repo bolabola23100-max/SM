@@ -102,7 +102,21 @@ public class ProductInteraction : MonoBehaviour
             return false;
 
         product.tag = "Product";
+
+        // Freeze every Rigidbody immediately. Some product prefabs contain
+        // child rigidbodies; leaving one dynamic can launch the item when it
+        // overlaps the shelf or another collider during placement.
+        Rigidbody[] productBodies = product.GetComponentsInChildren<Rigidbody>(true);
+        foreach (Rigidbody body in productBodies)
+        {
+            body.isKinematic = true;
+            body.useGravity = false;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
         product.transform.rotation = Quaternion.Euler(data.rotation);
+        Physics.SyncTransforms();
 
         Bounds productBounds = GetWorldBounds(product);
         Vector3 visualCenterOffset = productBounds.center - product.transform.position;
@@ -126,14 +140,8 @@ public class ProductInteraction : MonoBehaviour
         product.transform.position = targetVisualCenter - visualCenterOffset;
         product.transform.SetParent(zone.transform, true);
 
-        Rigidbody body = product.GetComponent<Rigidbody>();
-        if (body != null)
-        {
-            body.isKinematic = true;
-            body.useGravity = false;
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
-        }
+        // Apply the final transform to physics before registering the item.
+        Physics.SyncTransforms();
 
         if (!zone.RegisterProduct(product.transform))
         {
