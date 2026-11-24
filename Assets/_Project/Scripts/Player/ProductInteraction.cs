@@ -359,27 +359,34 @@ public class ProductInteraction : MonoBehaviour
         return bounds;
     }
 
-    private void DropProduct()
+    [Header("Throw Settings")]
+    [Min(0f)] public float throwForwardForce = 2.5f;
+    [Min(0f)] public float throwUpwardForce = 1.0f;
+    [Min(0.1f)] public float throwDistance = 1.2f;
+
+    /// <summary>Called by the separate Drop/Throw UI button.</summary>
+    public void ThrowHeldBox()
     {
-        if (heldProduct == null)
-        {
-            ClearHeldState();
+        if (!IsHoldingProduct)
             return;
-        }
 
-        Vector3 dropPosition = heldProduct.transform.position;
-        if (playerCamera != null)
-            dropPosition = playerCamera.transform.position + playerCamera.transform.forward * 1.5f;
+        Rigidbody box = heldProduct;
+        Vector3 forward = playerCamera != null
+            ? playerCamera.transform.forward
+            : transform.forward;
+        Vector3 origin = playerCamera != null
+            ? playerCamera.transform.position
+            : transform.position;
 
-        heldProduct.transform.SetParent(null, true);
-        heldProduct.transform.position = dropPosition;
+        box.transform.SetParent(null, true);
+        box.position = origin + forward * throwDistance;
 
         RestoreProductColliders();
 
-        heldProduct.isKinematic = false;
-        heldProduct.useGravity = true;
-        heldProduct.linearVelocity = Vector3.zero;
-        heldProduct.angularVelocity = Vector3.zero;
+        box.isKinematic = false;
+        box.useGravity = true;
+        box.linearVelocity = forward * throwForwardForce + Vector3.up * throwUpwardForce;
+        box.angularVelocity = Vector3.zero;
 
         ClearHeldState();
     }
