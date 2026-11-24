@@ -236,6 +236,11 @@ public class ComputerShopUI : MonoBehaviour
     {
         Image row = CreatePanel(parent, "StoreProduct_" + data.productId,
             new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, Color.white);
+
+        // The row is only a background. It must never compete with its child
+        // buttons for pointer/touch raycasts inside the ScrollRect viewport.
+        row.raycastTarget = false;
+
         LayoutElement element = row.gameObject.AddComponent<LayoutElement>();
         element.minHeight = 96f;
         element.preferredHeight = 96f;
@@ -592,6 +597,7 @@ public class ComputerShopUI : MonoBehaviour
         button.targetGraphic = image;
         // Keep the same reliable Button setup used by the working STORE/CART tabs.
         button.interactable = true;
+        button.navigation = new Navigation { mode = Navigation.Mode.None };
         button.onClick.RemoveAllListeners();
         button.onClick.AddListener(action);
 
@@ -600,8 +606,9 @@ public class ComputerShopUI : MonoBehaviour
         text.raycastTarget = false;
         text.enabled = true;
 
-        // Ensure the button itself receives pointer events, not its label.
+        // Keep the clickable graphic above sibling graphics in the same row.
         image.raycastTarget = true;
+        rect.SetAsLastSibling();
         return button;
     }
 }
