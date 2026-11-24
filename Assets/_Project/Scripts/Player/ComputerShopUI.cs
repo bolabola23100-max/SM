@@ -23,8 +23,8 @@ public class ComputerShopUI : MonoBehaviour
     [SerializeField] private ComputerInteraction computerInteraction;
     [Tooltip("Assign the flat front surface of the monitor. If empty, ComputerInteraction.Screen Surface is used.")]
     [SerializeField] private Transform screenSurface;
-    [Min(0.1f)][SerializeField] private float screenWorldWidth = 0.85f;
-    [SerializeField] private float surfaceOffset = 0.012f;
+    [Min(0.1f)][SerializeField] private float screenWorldWidth = 1.15f;
+    [SerializeField] private float surfaceOffset = 0.045f;
     [SerializeField] private Vector2 panelSize = new Vector2(900f, 620f);
 
     private sealed class CartEntry
@@ -55,6 +55,7 @@ public class ComputerShopUI : MonoBehaviour
     private float balance;
     private bool wasFocused;
     private bool hasMonitorSurface;
+    private Transform monitorSurfaceTransform;
     private string currentPage = "Store";
 
     private readonly Color ink = new Color(0.08f, 0.11f, 0.14f);
@@ -78,7 +79,38 @@ public class ComputerShopUI : MonoBehaviour
         wasFocused = focused;
         canvas.gameObject.SetActive(focused && hasMonitorSurface);
         if (focused && hasMonitorSurface)
+        {
             ShowPage(currentPage);
+            KeepCanvasVisibleOnMonitor();
+        }
+    }
+
+    // Keep the world-space UI on the front of the monitor and facing the player camera.
+    // This avoids the canvas being hidden when the imported monitor model has a reversed
+    // local forward axis or a screen pivot that is slightly behind the glass.
+    private void LateUpdate()
+    {
+        if (!wasFocused || !hasMonitorSurface || canvas == null ||
+            computerInteraction == null || computerInteraction.playerCamera == null ||
+            monitorSurfaceTransform == null)
+            return;
+
+        KeepCanvasVisibleOnMonitor();
+    }
+
+    private void KeepCanvasVisibleOnMonitor()
+    {
+        Transform cam = computerInteraction.playerCamera.transform;
+        Vector3 surfacePosition = monitorSurfaceTransform.position;
+        Vector3 towardCamera = (cam.position - surfacePosition).normalized;
+        if (towardCamera.sqrMagnitude < 0.001f)
+            return;
+
+        canvas.transform.position = surfacePosition + towardCamera * 0.045f;
+        Vector3 up = monitorSurfaceTransform.up.sqrMagnitude > 0.001f
+            ? monitorSurfaceTransform.up
+            : Vector3.up;
+        canvas.transform.rotation = Quaternion.LookRotation(towardCamera, up);
     }
 
     private void BuildInterface()
@@ -103,6 +135,7 @@ public class ComputerShopUI : MonoBehaviour
         if (monitorSurface != null)
         {
             hasMonitorSurface = true;
+            monitorSurfaceTransform = monitorSurface;
             canvasRect.SetParent(monitorSurface, false);
             canvasRect.localPosition = Vector3.forward * surfaceOffset;
             canvasRect.localRotation = Quaternion.identity;
