@@ -9,8 +9,8 @@ public class ProductInteraction : MonoBehaviour
 
     [Header("Settings")]
     public float interactionDistance = 3.5f;
-    [Tooltip("Small offset above the shelf surface to prevent clipping.")]
-    public float placementSurfaceOffset = 0.01f;
+    [Tooltip("Small gap above the shelf surface.")]
+    public float placementSurfaceOffset = 0.015f;
 
     private Rigidbody heldProduct;
     private Collider[] productColliders;
@@ -21,7 +21,6 @@ public class ProductInteraction : MonoBehaviour
 
     private void Update()
     {
-        // Keyboard support for testing in the Editor.
         if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
             Interact();
     }
@@ -39,14 +38,10 @@ public class ProductInteraction : MonoBehaviour
 
         if (holdPoint != null)
         {
-            heldProduct.transform.SetPositionAndRotation(
-                holdPoint.position,
-                holdPoint.rotation
-            );
+            heldProduct.transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
         }
     }
 
-    // Called by the mobile interaction button or the Editor keyboard.
     public void Interact()
     {
         if (IsHoldingProduct)
@@ -55,21 +50,14 @@ public class ProductInteraction : MonoBehaviour
             TryPickupBox();
     }
 
-    /// <summary>
-    /// Places the held box only when the player is aiming at a shelf.
-    /// Returns false when no valid shelf surface is targeted.
-    /// </summary>
+    /// <summary>Places the held box in the ShelfZone closest to the aimed shelf level.</summary>
     public bool TryPlaceHeldProductOnShelf()
     {
         if (!IsHoldingProduct || playerCamera == null)
             return false;
 
-        if (!Physics.Raycast(
-                playerCamera.transform.position,
-                playerCamera.transform.forward,
-                out RaycastHit hit,
-                interactionDistance,
-                Physics.DefaultRaycastLayers,
+        if (!Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward,
+                out RaycastHit hit, interactionDistance, Physics.DefaultRaycastLayers,
                 QueryTriggerInteraction.Ignore))
             return false;
 
@@ -77,16 +65,51 @@ public class ProductInteraction : MonoBehaviour
         if (shelf == null || shelf.IsHeld())
             return false;
 
-        // Only place on an upward-facing shelf surface, not its side or back.
-        if (Vector3.Dot(hit.normal, Vector3.up) < 0.65f)
+        ShelfZone zone = FindBestShelfZone(shelf, hit.point);
+        if (zone == null)
+        {
+            Debug.LogWarning("Shelf placement failed: no ShelfZone was found under this shelf.");
             return false;
+        }
 
-        ShelfZone zone = shelf.GetComponentInChildren<ShelfZone>();
-        if (zone == null || zone.IsFull)
+        if (zone.IsFull)
+        {
+            Debug.LogWarning("Shelf placement failed: the targeted ShelfZone is full.");
             return false;
+        }
 
-        PlaceProductOnShelf(hit, zone);
+        PlaceProductOnShelf(hit.point, zone);
         return true;
+    }
+
+    private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint)
+    {
+        ShelfZone[] zones = shelf.GetComponentsInChildren<ShelfZone>(true);
+        ShelfZone bestZone = null;
+        float bestDistance = float.PositiveInfinity;
+
+        foreach (ShelfZone candidate in zones)
+        {
+            if (candidate == null)
+                continue;
+
+            BoxCollider zoneCollider = candidate.GetComponent<BoxCollider>();
+            if (zoneCollider == null || !zoneCollider.enabled)
+                continue;
+
+            Bounds bounds = zoneCollider.bounds;
+            Vector3 closest = bounds.ClosestPoint(aimPoint);
+            float distance = (closest - aimPoint).sqrMagnitude;
+
+            // Prefer the zone whose volume is closest to the point the player is aiming at.
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestZone = candidate;
+            }
+        }
+
+        return bestZone;
     }
 
     private void TryPickupBox()
@@ -94,16 +117,11 @@ public class ProductInteraction : MonoBehaviour
         if (playerCamera == null || holdPoint == null)
             return;
 
-        if (!Physics.Raycast(
-                playerCamera.transform.position,
-                playerCamera.transform.forward,
-                out RaycastHit hit,
-                interactionDistance,
-                Physics.DefaultRaycastLayers,
+        if (!Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward,
+                out RaycastHit hit, interactionDistance, Physics.DefaultRaycastLayers,
                 QueryTriggerInteraction.Ignore))
             return;
 
-        // Do not allow shelves, loose products, or arbitrary Rigidbody objects to be picked up.
         if (!HasTagInParents(hit.collider.transform, "Box"))
             return;
 
@@ -138,22 +156,17 @@ public class ProductInteraction : MonoBehaviour
         heldProduct.useGravity = false;
         heldProduct.linearVelocity = Vector3.zero;
         heldProduct.angularVelocity = Vector3.zero;
-
-        heldProduct.transform.SetPositionAndRotation(
-            holdPoint.position,
-            holdPoint.rotation
-        );
+        heldProduct.transform.SetPositionAndRotation(holdPoint.position, holdPoint.rotation);
     }
 
-    private void PlaceProductOnShelf(RaycastHit hit, ShelfZone zone)
+    private void PlaceProductOnShelf(Vector3 aimPoint, ShelfZone zone)
     {
         if (heldProduct == null || zone == null)
             return;
 
-        // Restore the product colliders so ShelfZone's trigger can detect it.
+        // Re-enable the box collider before measuring it and before the trigger detects it.
         RestoreProductColliders();
 
-        // Keep the Rigidbody frozen on the shelf: no gravity and no physics falling.
         heldProduct.isKinematic = true;
         heldProduct.useGravity = false;
         heldProduct.linearVelocity = Vector3.zero;
@@ -165,16 +178,12 @@ public class ProductInteraction : MonoBehaviour
         float halfX = Mathf.Min(productBounds.extents.x, zoneBounds.extents.x * 0.45f);
         float halfZ = Mathf.Min(productBounds.extents.z, zoneBounds.extents.z * 0.45f);
 
-        float x = Mathf.Clamp(hit.point.x,
-            zoneBounds.min.x + halfX,
-            zoneBounds.max.x - halfX);
+        float x = Mathf.Clamp(aimPoint.x, zoneBounds.min.x + halfX, zoneBounds.max.x - halfX);
+        float z = Mathf.Clamp(aimPoint.z, zoneBounds.min.z + halfZ, zoneBounds.max.z - halfZ);
 
-        float z = Mathf.Clamp(hit.point.z,
-            zoneBounds.min.z + halfZ,
-            zoneBounds.max.z - halfZ);
-
-        // Put the bottom of the product just above the shelf surface.
-        float y = hit.point.y + productBounds.extents.y + placementSurfaceOffset;
+        // The bottom of ProductZone should be aligned with the shelf platform.
+        // This works even if the camera ray hits the shelf's vertical frame instead of its top.
+        float y = zoneBounds.min.y + productBounds.extents.y + placementSurfaceOffset;
         Vector3 targetPosition = new Vector3(x, y, z);
 
         heldProduct.transform.SetParent(zone.transform, true);
@@ -186,6 +195,7 @@ public class ProductInteraction : MonoBehaviour
         heldProduct.linearVelocity = Vector3.zero;
         heldProduct.angularVelocity = Vector3.zero;
 
+        Debug.Log("Product placed on shelf zone: " + zone.name);
         ClearHeldState();
     }
 
@@ -198,7 +208,7 @@ public class ProductInteraction : MonoBehaviour
         {
             foreach (Collider productCollider in productColliders)
             {
-                if (productCollider == null || !productCollider.enabled)
+                if (productCollider == null || !productCollider.enabled || productCollider.isTrigger)
                     continue;
 
                 if (!hasBounds)
@@ -229,10 +239,7 @@ public class ProductInteraction : MonoBehaviour
 
         Vector3 dropPosition = heldProduct.transform.position;
         if (playerCamera != null)
-        {
-            dropPosition = playerCamera.transform.position
-                         + playerCamera.transform.forward * 1.5f;
-        }
+            dropPosition = playerCamera.transform.position + playerCamera.transform.forward * 1.5f;
 
         heldProduct.transform.SetParent(null, true);
         heldProduct.transform.position = dropPosition;
@@ -274,10 +281,8 @@ public class ProductInteraction : MonoBehaviour
         {
             if (current.CompareTag(tag))
                 return true;
-
             current = current.parent;
         }
-
         return false;
     }
 }
