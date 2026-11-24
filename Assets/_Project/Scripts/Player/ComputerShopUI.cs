@@ -258,7 +258,7 @@ public class ComputerShopUI : MonoBehaviour
         int amount = selectedQuantities.TryGetValue(data, out int value) ? value : 1;
         cart[data] = (cart.TryGetValue(data, out int old) ? old : 0) + amount;
         RefreshHeader();
-        SetStatus("اتضاف " + amount + " كرتونة من " + data.productName + " للسلة.");
+        SetStatus("ADDED " + amount + " CARTON(S) OF " + data.productName + " TO CART.");
     }
 
     private void BuildCartPage()
@@ -266,12 +266,12 @@ public class ComputerShopUI : MonoBehaviour
         CreateText(contentArea, "SHOPPING CART", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
-        CreateButton(contentArea, "عرض MY ORDERS", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
+        CreateButton(contentArea, "VIEW MY ORDERS", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
             new Color(1f, 0.82f, 0.12f), new Color(0.04f, 0.10f, 0.20f), () => ShowPage("Orders"));
 
         if (cart.Count == 0)
         {
-            CreateText(contentArea, "CART فاضية. ارجع للمتجر واضف المنتجات اللي محتاجها.",
+            CreateText(contentArea, "YOUR CART IS EMPTY. GO TO STORE TO ADD PRODUCTS.",
                 27, FontStyle.Bold, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.72f),
                 TextAnchor.MiddleCenter, muted);
             return;
@@ -287,7 +287,7 @@ public class ComputerShopUI : MonoBehaviour
         }
 
         float total = CalculateCartTotal();
-        CreateText(contentArea, "إجمالي CART: " + total.ToString("0.##"),
+        CreateText(contentArea, "CART TOTAL: " + total.ToString("0.##"),
             20, FontStyle.Bold, new Vector2(0.03f, 0.08f), new Vector2(0.55f, 0.18f),
             TextAnchor.MiddleLeft, ink);
         CreateButton(contentArea, "PLACE ORDER", new Vector2(0.70f, 0.055f), new Vector2(0.975f, 0.18f),
@@ -370,7 +370,7 @@ public class ComputerShopUI : MonoBehaviour
     {
         if (cart.Count == 0)
         {
-            SetStatus("CART فاضية.");
+            SetStatus("YOUR CART IS EMPTY.");
             return;
         }
 
@@ -393,7 +393,7 @@ public class ComputerShopUI : MonoBehaviour
         {
             if (entry.Key == null || entry.Key.productPrefab == null || entry.Value <= 0)
             {
-                SetStatus("في منتج غير صالح في CART. احذفه وحاول تاني.");
+                SetStatus("INVALID PRODUCT IN CART. REMOVE IT AND TRY AGAIN.");
                 return;
             }
         }
@@ -454,7 +454,7 @@ public class ComputerShopUI : MonoBehaviour
             int count = 0;
             foreach (int value in cart.Values)
                 count += value;
-            cartCountLabel.text = "عدد الكراتين في CART: " + count;
+            cartCountLabel.text = "CARTONS IN CART: " + count;
         }
     }
 
