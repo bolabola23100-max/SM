@@ -15,7 +15,7 @@ public class ComputerInteraction : MonoBehaviour
 
     [Header("Detection")]
     [Min(0.5f)] public float interactionDistance = 3.5f;
-    [Min(0.1f)] public float focusDistanceFromScreen = 0.65f;
+    [Min(0.1f)] public float focusDistanceFromScreen = 0.35f;
     public LayerMask detectionMask = Physics.DefaultRaycastLayers;
 
     [Header("Camera Motion")]
@@ -75,8 +75,9 @@ public class ComputerInteraction : MonoBehaviour
         // Use the monitor's full bounds, not the exact pixel/point hit by the ray.
         // This makes taps aimed at any part of the screen focus the same center point.
         Transform surface = screenSurface != null ? screenSurface : hit.collider.transform;
-        Bounds screenBounds = hit.collider.bounds;
-        Vector3 screenCenter = screenBounds.center;
+        // ScreenSurface is an empty transform placed at the exact center of the display.
+        // Use its position rather than the computer's large body collider center.
+        Vector3 screenCenter = surface.position;
 
         FocusOnScreen(surface, screenCenter);
         return true;
