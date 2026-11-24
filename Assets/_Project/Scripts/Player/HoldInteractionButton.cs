@@ -84,14 +84,25 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
 
         targetShelf = null;
 
+        // When carrying a shelf, a tap confirms its placement.
         if (startedWhileHoldingShelf)
         {
             furnitureController.HoldButton();
             return;
         }
 
-        // Boxes use a normal tap. Releasing an incomplete shelf hold does nothing.
-        if (productInteraction.IsHoldingProduct || IsBoxUnderAim())
+        // When carrying a box, aiming at a shelf places it there.
+        // Otherwise the existing normal drop behavior is preserved.
+        if (productInteraction.IsHoldingProduct)
+        {
+            if (!productInteraction.TryPlaceHeldProductOnShelf())
+                productInteraction.Interact();
+
+            return;
+        }
+
+        // A box is picked up with a normal tap. Shelf pickup still requires a long press.
+        if (IsBoxUnderAim())
             productInteraction.Interact();
     }
 
