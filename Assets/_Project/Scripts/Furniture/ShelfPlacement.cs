@@ -11,13 +11,23 @@ public class ShelfPlacement : MonoBehaviour
     public Camera playerCamera;
     public Collider placementCollider;
 
+    [Header("Placement Preview")]
+    [SerializeField] private Color validColor = new Color(0.15f, 1f, 0.25f, 1f);
+    [SerializeField] private Color invalidColor = new Color(1f, 0.12f, 0.12f, 1f);
+
     private bool isHeld;
     private bool canPlace;
-
     private Vector3 originalPosition;
     private Quaternion originalRotation;
     private float currentRotation;
     private Rigidbody rb;
+
+    private Renderer[] shelfRenderers;
+    private MaterialPropertyBlock[] originalPropertyBlocks;
+    private MaterialPropertyBlock previewPropertyBlock;
+
+    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorId = Shader.PropertyToID("_Color");
 
     private void Awake()
     {
@@ -27,6 +37,16 @@ public class ShelfPlacement : MonoBehaviour
         {
             rb.isKinematic = true;
             rb.useGravity = false;
+        }
+
+        shelfRenderers = GetComponentsInChildren<Renderer>(true);
+        originalPropertyBlocks = new MaterialPropertyBlock[shelfRenderers.Length];
+        previewPropertyBlock = new MaterialPropertyBlock();
+
+        for (int i = 0; i < shelfRenderers.Length; i++)
+        {
+            originalPropertyBlocks[i] = new MaterialPropertyBlock();
+            shelfRenderers[i].GetPropertyBlock(originalPropertyBlocks[i]);
         }
     }
 
@@ -41,8 +61,18 @@ public class ShelfPlacement : MonoBehaviour
         if (playerCamera == null)
             return;
 
-        Vector3 targetPosition = playerCamera.transform.position
-                               + playerCamera.transform.forward * moveDistance;
+        // Project the camera direction onto the horizontal plane.
+        // This keeps the shelf at its pickup height even when the player looks up/down.
+        Vector3 flatForward = Vector3.ProjectOnPlane(
+            playerCamera.transform.forward,
+            Vector3.up
+        ).normalized;
+
+        if (flatForward.sqrMagnitude < 0.001f)
+            flatForward = Vector3.forward;
+
+        Vector3 targetPosition = playerCamera.transform.position + flatForward * moveDistance;
+        targetPosition.y = originalPosition.y;
 
         transform.position = Vector3.Lerp(
             transform.position,
@@ -68,6 +98,7 @@ public class ShelfPlacement : MonoBehaviour
 
         isHeld = true;
         canPlace = false;
+        ApplyPlacementPreview(false);
 
         if (rb != null)
             rb.isKinematic = true;
@@ -86,6 +117,7 @@ public class ShelfPlacement : MonoBehaviour
 
         isHeld = false;
         canPlace = false;
+        RestoreOriginalAppearance();
 
         if (rb != null)
             rb.isKinematic = true;
@@ -99,11 +131,41 @@ public class ShelfPlacement : MonoBehaviour
         transform.SetPositionAndRotation(originalPosition, originalRotation);
         isHeld = false;
         canPlace = false;
+        RestoreOriginalAppearance();
     }
 
     public void SetPlacementValidity(bool valid)
     {
         canPlace = valid;
+
+        if (isHeld)
+            ApplyPlacementPreview(valid);
+    }
+
+    private void ApplyPlacementPreview(bool valid)
+    {
+        Color previewColor = valid ? validColor : invalidColor;
+
+        for (int i = 0; i < shelfRenderers.Length; i++)
+        {
+            Renderer shelfRenderer = shelfRenderers[i];
+            if (shelfRenderer == null)
+                continue;
+
+            shelfRenderer.GetPropertyBlock(previewPropertyBlock);
+            previewPropertyBlock.SetColor(BaseColorId, previewColor);
+            previewPropertyBlock.SetColor(ColorId, previewColor);
+            shelfRenderer.SetPropertyBlock(previewPropertyBlock);
+        }
+    }
+
+    private void RestoreOriginalAppearance()
+    {
+        for (int i = 0; i < shelfRenderers.Length; i++)
+        {
+            if (shelfRenderers[i] != null)
+                shelfRenderers[i].SetPropertyBlock(originalPropertyBlocks[i]);
+        }
     }
 
     public bool IsHeld()
