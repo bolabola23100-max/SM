@@ -12,8 +12,8 @@ public class ShelfPlacement : MonoBehaviour
     public Collider placementCollider;
 
     [Header("Placement Preview")]
-    [SerializeField] private Color validColor = new Color(0.05f, 1f, 0.08f, 1f);
-    [SerializeField] private Color invalidColor = new Color(1f, 0.03f, 0.03f, 1f);
+    [SerializeField] private Color validColor = new Color(0f, 1f, 0f, 1f);
+    [SerializeField] private Color invalidColor = new Color(1f, 0f, 0f, 1f);
 
     private bool isHeld;
     private bool canPlace;
@@ -52,9 +52,7 @@ public class ShelfPlacement : MonoBehaviour
             {
                 if (source[j] == null) continue;
 
-                Material preview = new Material(source[j]);
-                ConfigureOpaquePreview(preview);
-                previewMaterials[i][j] = preview;
+                previewMaterials[i][j] = CreatePreviewMaterial(source[j]);
             }
         }
     }
@@ -166,31 +164,18 @@ public class ShelfPlacement : MonoBehaviour
                 shelfRenderers[i].sharedMaterials = originalMaterials[i];
     }
 
-    private static void ConfigureOpaquePreview(Material material)
+    private static Material CreatePreviewMaterial(Material original)
     {
-        // Keep preview fully opaque. Only the tint changes to green/red.
-        if (material.HasProperty("_Surface")) material.SetFloat("_Surface", 0f);
-        if (material.HasProperty("_Mode")) material.SetFloat("_Mode", 0f);
-        if (material.HasProperty("_ZWrite")) material.SetInt("_ZWrite", 1);
+        // Unlit preview keeps the green/red color vivid regardless of scene lighting.
+        Shader previewShader =
+            Shader.Find("Universal Render Pipeline/Unlit") ??
+            Shader.Find("Unlit/Color") ??
+            Shader.Find("Sprites/Default");
 
-        material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        material.DisableKeyword("_ALPHABLEND_ON");
-        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        material.DisableKeyword("_ALPHATEST_ON");
-        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
-
-        if (material.HasProperty(BaseColorId))
-        {
-            Color c = material.GetColor(BaseColorId);
-            c.a = 1f;
-            material.SetColor(BaseColorId, c);
-        }
-        if (material.HasProperty(ColorId))
-        {
-            Color c = material.GetColor(ColorId);
-            c.a = 1f;
-            material.SetColor(ColorId, c);
-        }
+        Material preview = previewShader != null ? new Material(previewShader) : new Material(original);
+        preview.name = "Shelf Placement Preview";
+        preview.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
+        return preview;
     }
 
     private void OnDestroy()
