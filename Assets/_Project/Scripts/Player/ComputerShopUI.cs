@@ -23,9 +23,9 @@ public class ComputerShopUI : MonoBehaviour
     [SerializeField] private ComputerInteraction computerInteraction;
     [Tooltip("Assign the flat front surface of the monitor. If empty, ComputerInteraction.Screen Surface is used.")]
     [SerializeField] private Transform screenSurface;
-    [Min(0.1f)][SerializeField] private float screenWorldWidth = 1.15f;
+    [Min(0.1f)][SerializeField] private float screenWorldWidth = 1.5f;
     [SerializeField] private float surfaceOffset = 0.045f;
-    [SerializeField] private Vector2 panelSize = new Vector2(900f, 620f);
+    [SerializeField] private Vector2 panelSize = new Vector2(1200f, 800f);
 
     private sealed class CartEntry
     {
@@ -83,34 +83,6 @@ public class ComputerShopUI : MonoBehaviour
             ShowPage(currentPage);
             KeepCanvasVisibleOnMonitor();
         }
-    }
-
-    // Keep the world-space UI on the front of the monitor and facing the player camera.
-    // This avoids the canvas being hidden when the imported monitor model has a reversed
-    // local forward axis or a screen pivot that is slightly behind the glass.
-    private void LateUpdate()
-    {
-        if (!wasFocused || !hasMonitorSurface || canvas == null ||
-            computerInteraction == null || computerInteraction.playerCamera == null ||
-            monitorSurfaceTransform == null)
-            return;
-
-        KeepCanvasVisibleOnMonitor();
-    }
-
-    private void KeepCanvasVisibleOnMonitor()
-    {
-        Transform cam = computerInteraction.playerCamera.transform;
-        Vector3 surfacePosition = monitorSurfaceTransform.position;
-        Vector3 towardCamera = (cam.position - surfacePosition).normalized;
-        if (towardCamera.sqrMagnitude < 0.001f)
-            return;
-
-        canvas.transform.position = surfacePosition + towardCamera * 0.045f;
-        Vector3 up = monitorSurfaceTransform.up.sqrMagnitude > 0.001f
-            ? monitorSurfaceTransform.up
-            : Vector3.up;
-        canvas.transform.rotation = Quaternion.LookRotation(towardCamera, up);
     }
 
     private void BuildInterface()
@@ -563,7 +535,7 @@ public class ComputerShopUI : MonoBehaviour
         rect.offsetMax = Vector2.zero;
         Text text = go.GetComponent<Text>();
         text.text = value;
-        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         text.fontSize = fontSize;
         text.fontStyle = style;
         text.alignment = alignment;
