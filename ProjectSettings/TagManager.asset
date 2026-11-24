@@ -12,6 +12,8 @@ TagManager:
   - Cube_Spawn_Point_2
   - Furniture
   - Box
+  - ShelfFloor
+  - ShelfWall
   layers:
   - Default
   - TransparentFX
