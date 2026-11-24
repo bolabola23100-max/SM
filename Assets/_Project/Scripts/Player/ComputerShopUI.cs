@@ -81,7 +81,6 @@ public class ComputerShopUI : MonoBehaviour
         if (focused && hasMonitorSurface)
         {
             ShowPage(currentPage);
-            KeepCanvasVisibleOnMonitor();
         }
     }
 
