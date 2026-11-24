@@ -31,6 +31,7 @@ public class ComputerShopUI : MonoBehaviour
     private Text statusLabel;
     private float balance;
     private bool wasFocused;
+    private bool hasMonitorSurface;
 
     private void Awake()
     {
@@ -46,8 +47,8 @@ public class ComputerShopUI : MonoBehaviour
             return;
 
         wasFocused = focused;
-        canvas.gameObject.SetActive(focused);
-        if (focused)
+        canvas.gameObject.SetActive(focused && hasMonitorSurface);
+        if (focused && hasMonitorSurface)
             RefreshBalance();
     }
 
@@ -72,6 +73,7 @@ public class ComputerShopUI : MonoBehaviour
 
         if (monitorSurface != null)
         {
+            hasMonitorSurface = true;
             canvasRect.SetParent(monitorSurface, false);
             canvasRect.localPosition = Vector3.forward * surfaceOffset;
             canvasRect.localRotation = Quaternion.identity;
