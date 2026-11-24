@@ -109,7 +109,7 @@ public class ComputerShopUI : MonoBehaviour
             monitorSurfaceTransform = monitorSurface;
             canvasRect.SetParent(monitorSurface, false);
             canvasRect.localPosition = Vector3.forward * surfaceOffset;
-            canvasRect.localRotation = Quaternion.identity;
+            canvasRect.localRotation = Quaternion.Euler(0f, 180f, 0f);
         }
         else
         {
@@ -126,11 +126,11 @@ public class ComputerShopUI : MonoBehaviour
             new Vector2(0.5f, 0.5f), Vector2.zero, panelSize, new Color(0.03f, 0.32f, 0.78f, 1f));
         pageRoot = background.rectTransform;
 
-        CreateText(pageRoot, "SUPERMARKET  /  SUPPLY STORE", 28, FontStyle.Bold,
+        CreateText(pageRoot, "SUPERMARKET  /  SUPPLY STORE", 40, FontStyle.Bold,
             new Vector2(0.035f, 0.91f), new Vector2(0.60f, 0.99f),
             TextAnchor.MiddleLeft, ink);
 
-        balanceLabel = CreateText(pageRoot, "", 21, FontStyle.Bold,
+        balanceLabel = CreateText(pageRoot, "", 30, FontStyle.Bold,
             new Vector2(0.66f, 0.91f), new Vector2(0.965f, 0.99f),
             TextAnchor.MiddleRight, green);
 
@@ -141,7 +141,7 @@ public class ComputerShopUI : MonoBehaviour
         CreateButton(pageRoot, "طلباتي", new Vector2(0.375f, 0.835f), new Vector2(0.53f, 0.90f),
             new Color(0.85f, 0.89f, 0.92f), ink, () => ShowPage("Orders"));
 
-        cartCountLabel = CreateText(pageRoot, "", 16, FontStyle.Bold,
+        cartCountLabel = CreateText(pageRoot, "", 24, FontStyle.Bold,
             new Vector2(0.55f, 0.835f), new Vector2(0.75f, 0.90f),
             TextAnchor.MiddleLeft, green);
 
@@ -149,7 +149,7 @@ public class ComputerShopUI : MonoBehaviour
             new Vector2(0.5f, 0.47f), Vector2.zero, new Vector2(panelSize.x * 0.93f, panelSize.y * 0.65f),
             new Color(0.78f, 0.89f, 1f, 1f)).rectTransform;
 
-        statusLabel = CreateText(pageRoot, "", 15, FontStyle.Bold,
+        statusLabel = CreateText(pageRoot, "", 22, FontStyle.Bold,
             new Vector2(0.035f, 0.035f), new Vector2(0.72f, 0.105f),
             TextAnchor.MiddleLeft, new Color(0.55f, 0.34f, 0.05f));
 
@@ -178,14 +178,14 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildStorePage()
     {
-        CreateText(contentArea, "المنتجات المتاحة", 22, FontStyle.Bold,
+        CreateText(contentArea, "المنتجات المتاحة", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
         GameObject scrollObject = CreateScrollArea(contentArea, new Vector2(0.02f, 0.04f), new Vector2(0.98f, 0.89f),
             out RectTransform content);
         if (productDatabase == null || productDatabase.Products.Count == 0)
         {
-            CreateText(content, "مفيش منتجات في Product Database.", 20, FontStyle.Bold,
+            CreateText(content, "مفيش منتجات في Product Database.", 28, FontStyle.Bold,
                 new Vector2(0.05f, 0.7f), new Vector2(0.95f, 0.9f), TextAnchor.MiddleCenter, muted);
             return;
         }
@@ -211,15 +211,15 @@ public class ComputerShopUI : MonoBehaviour
         element.preferredHeight = 96f;
 
         RectTransform r = row.rectTransform;
-        CreateText(r, data.productName + "  |  " + data.category, 19, FontStyle.Bold,
+        CreateText(r, data.productName + "  |  " + data.category, 28, FontStyle.Bold,
             new Vector2(0.025f, 0.55f), new Vector2(0.52f, 0.94f), TextAnchor.MiddleLeft, ink);
         CreateText(r, "سعر الكرتونة: " + data.PackCost.ToString("0.##") + "  •  " + data.packSize + " قطعة",
-            15, FontStyle.Normal, new Vector2(0.025f, 0.08f), new Vector2(0.52f, 0.50f),
+            22, FontStyle.Normal, new Vector2(0.025f, 0.08f), new Vector2(0.52f, 0.50f),
             TextAnchor.MiddleLeft, muted);
 
         CreateButton(r, "−", new Vector2(0.56f, 0.20f), new Vector2(0.62f, 0.80f),
             new Color(0.86f, 0.89f, 0.92f), ink, () => ChangeSelectedQuantity(data, -1));
-        Text quantity = CreateText(r, selectedQuantities[data].ToString(), 19, FontStyle.Bold,
+        Text quantity = CreateText(r, selectedQuantities[data].ToString(), 28, FontStyle.Bold,
             new Vector2(0.625f, 0.20f), new Vector2(0.69f, 0.80f),
             TextAnchor.MiddleCenter, ink);
         selectedQuantityLabels[data] = quantity;
@@ -247,7 +247,7 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildCartPage()
     {
-        CreateText(contentArea, "سلة المشتريات", 22, FontStyle.Bold,
+        CreateText(contentArea, "سلة المشتريات", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
         CreateButton(contentArea, "عرض طلباتي", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
@@ -256,7 +256,7 @@ public class ComputerShopUI : MonoBehaviour
         if (cart.Count == 0)
         {
             CreateText(contentArea, "السلة فاضية. ارجع للمتجر واضف المنتجات اللي محتاجها.",
-                19, FontStyle.Bold, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.72f),
+                27, FontStyle.Bold, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.72f),
                 TextAnchor.MiddleCenter, muted);
             return;
         }
@@ -287,10 +287,10 @@ public class ComputerShopUI : MonoBehaviour
         element.preferredHeight = 76f;
 
         RectTransform r = row.rectTransform;
-        CreateText(r, data.productName + "  ×  " + amount, 18, FontStyle.Bold,
+        CreateText(r, data.productName + "  ×  " + amount, 27, FontStyle.Bold,
             new Vector2(0.025f, 0.15f), new Vector2(0.55f, 0.85f), TextAnchor.MiddleLeft, ink);
         CreateText(r, "الإجمالي: " + (data.PackCost * amount).ToString("0.##"),
-            16, FontStyle.Normal, new Vector2(0.56f, 0.15f), new Vector2(0.80f, 0.85f),
+            24, FontStyle.Normal, new Vector2(0.56f, 0.15f), new Vector2(0.80f, 0.85f),
             TextAnchor.MiddleCenter, muted);
         CreateButton(r, "−", new Vector2(0.83f, 0.18f), new Vector2(0.89f, 0.82f),
             new Color(0.86f, 0.89f, 0.92f), ink, () => ChangeCartQuantity(data, -1));
@@ -314,7 +314,7 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildOrdersPage()
     {
-        CreateText(contentArea, "طلباتي السابقة", 22, FontStyle.Bold,
+        CreateText(contentArea, "طلباتي السابقة", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
         CreateButton(contentArea, "الرجوع للسلة", new Vector2(0.76f, 0.91f), new Vector2(0.975f, 0.99f),
@@ -322,7 +322,7 @@ public class ComputerShopUI : MonoBehaviour
 
         if (orderHistory.Count == 0)
         {
-            CreateText(contentArea, "لسه مفيش طلبات تم شراؤها.", 19, FontStyle.Bold,
+            CreateText(contentArea, "لسه مفيش طلبات تم شراؤها.", 27, FontStyle.Bold,
                 new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.72f),
                 TextAnchor.MiddleCenter, muted);
             return;
@@ -341,11 +341,11 @@ public class ComputerShopUI : MonoBehaviour
             element.preferredHeight = 74f;
             RectTransform r = row.rectTransform;
 
-            CreateText(r, order.productName + "  ×  " + order.quantity, 18, FontStyle.Bold,
+            CreateText(r, order.productName + "  ×  " + order.quantity, 27, FontStyle.Bold,
                 new Vector2(0.025f, 0.15f), new Vector2(0.58f, 0.85f), TextAnchor.MiddleLeft, ink);
-            CreateText(r, order.time, 14, FontStyle.Normal,
+            CreateText(r, order.time, 21, FontStyle.Normal,
                 new Vector2(0.59f, 0.15f), new Vector2(0.80f, 0.85f), TextAnchor.MiddleCenter, muted);
-            CreateText(r, order.total.ToString("0.##"), 17, FontStyle.Bold,
+            CreateText(r, order.total.ToString("0.##"), 25, FontStyle.Bold,
                 new Vector2(0.81f, 0.15f), new Vector2(0.97f, 0.85f), TextAnchor.MiddleCenter, green);
         }
     }
@@ -561,7 +561,7 @@ public class ComputerShopUI : MonoBehaviour
         button.targetGraphic = image;
         button.onClick.AddListener(action);
 
-        Text text = CreateText(rect, label, 17, FontStyle.Bold,
+        Text text = CreateText(rect, label, 26, FontStyle.Bold,
             Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, foreground);
         text.raycastTarget = false;
         return button;
