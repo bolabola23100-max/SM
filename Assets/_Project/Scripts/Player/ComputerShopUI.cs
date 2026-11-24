@@ -18,6 +18,10 @@ public class ComputerShopUI : MonoBehaviour
 
     [Header("UI")]
     [SerializeField] private ComputerInteraction computerInteraction;
+    [Tooltip("Assign the flat front surface of the monitor. If empty, ComputerInteraction.Screen Surface is used.")]
+    [SerializeField] private Transform screenSurface;
+    [Min(0.1f)][SerializeField] private float screenWorldWidth = 0.85f;
+    [SerializeField] private float surfaceOffset = 0.012f;
     [SerializeField] private Vector2 panelSize = new Vector2(900f, 620f);
 
     private readonly Dictionary<ProductData, int> quantities = new Dictionary<ProductData, int>();
@@ -49,17 +53,38 @@ public class ComputerShopUI : MonoBehaviour
 
     private void BuildInterface()
     {
+        Transform monitorSurface = screenSurface != null
+            ? screenSurface
+            : (computerInteraction != null ? computerInteraction.screenSurface : null);
+
         GameObject canvasObject = new GameObject("ComputerShopCanvas",
             typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
 
         canvas = canvasObject.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.worldCamera = computerInteraction != null ? computerInteraction.playerCamera : null;
+        canvas.overrideSorting = true;
         canvas.sortingOrder = 50;
 
+        RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = panelSize;
+        canvasRect.localScale = Vector3.one * (screenWorldWidth / Mathf.Max(1f, panelSize.x));
+
+        if (monitorSurface != null)
+        {
+            canvasRect.SetParent(monitorSurface, false);
+            canvasRect.localPosition = Vector3.forward * surfaceOffset;
+            canvasRect.localRotation = Quaternion.identity;
+        }
+        else
+        {
+            Debug.LogError("ComputerShopUI: Assign Screen Surface to the flat front of the computer monitor.");
+            canvasObject.SetActive(false);
+        }
+
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.matchWidthOrHeight = 0.5f;
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+        scaler.scaleFactor = 1f;
 
         Image background = CreatePanel(canvasObject.transform, "ShopBackground",
             new Vector2(0.5f, 0.5f), Vector2.zero, panelSize,
