@@ -2,7 +2,7 @@ using UnityEngine;
 using TMPro;
 
 /// <summary>
-/// Updates the normal Text component placed in the MobileControls Canvas.
+/// Updates the TextMeshProUGUI component placed in the MobileControls Canvas.
 /// The displayed time is read directly from DayNightCycle.
 /// </summary>
 [DisallowMultipleComponent]
