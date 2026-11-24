@@ -335,9 +335,9 @@ MonoBehaviour:
   playerCamera: {fileID: 1783931811}
   productInteraction: {fileID: 2048202605}
   furnitureController: {fileID: 2048202606}
+  holdProgressImage: {fileID: 2200000024}
   longPressDuration: 1
   interactionDistance: 4
-  holdProgressImage: {fileID: 2200000024}
 --- !u!1 &50646506 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -5127959516888333685, guid: bd229679de39c054e9271beb3ae6360a, type: 3}
@@ -4059,6 +4059,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: semi_skimmed_milk_carton_1l
       objectReference: {fileID: 0}
+    - target: {fileID: -4883475944828157534, guid: d6f49a521405d2746a929d6a7a40716a, type: 3}
+      propertyPath: m_TagString
+      value: Box
+      objectReference: {fileID: 0}
     - target: {fileID: -85752684837649585, guid: d6f49a521405d2746a929d6a7a40716a, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.03129996
@@ -7201,6 +7205,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
+  m_IsActive: 1
 --- !u!224 &2200000002
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7238,7 +7243,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -7275,6 +7280,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
+  m_IsActive: 0
 --- !u!224 &2200000012
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7312,7 +7318,7 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -7332,7 +7338,6 @@ MonoBehaviour:
   m_FillOrigin: 2
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
-
 --- !u!1 &2300000001
 GameObject:
   m_ObjectHideFlags: 0
@@ -7375,9 +7380,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a8c1d73f2e6b4a1d9f0c5b7e8a2d6143, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DayNightCycle
-  startHour: 9
+  startHour: 1
   endHour: 21
   dayLengthMinutes: 12
   timeScale: 1
