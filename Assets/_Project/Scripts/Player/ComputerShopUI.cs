@@ -599,7 +599,25 @@ public class ComputerShopUI : MonoBehaviour
         button.interactable = true;
         button.navigation = new Navigation { mode = Navigation.Mode.None };
         button.onClick.RemoveAllListeners();
-        button.onClick.AddListener(action);
+
+        // Route the click through EventSystem's pointer interface as well as
+        // the visual Button component. This remains compatible with
+        // InputSystemUIInputModule and avoids relying on legacy input polling.
+        EventTrigger trigger = go.GetComponent<EventTrigger>();
+        if (trigger == null)
+            trigger = go.AddComponent<EventTrigger>();
+
+        trigger.triggers = new List<EventTrigger.Entry>();
+        EventTrigger.Entry clickEntry = new EventTrigger.Entry
+        {
+            eventID = EventTriggerType.PointerClick
+        };
+        clickEntry.callback.AddListener(eventData =>
+        {
+            if (button != null && button.interactable)
+                action?.Invoke();
+        });
+        trigger.triggers.Add(clickEntry);
 
         Text text = CreateText(rect, label, 26, FontStyle.Bold,
             Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, foreground);
