@@ -593,39 +593,24 @@ public class ComputerShopUI : MonoBehaviour
         Image image = go.GetComponent<Image>();
         image.color = background;
         image.raycastTarget = true;
+
         Button button = go.GetComponent<Button>();
         button.targetGraphic = image;
-        // Keep the same reliable Button setup used by the working STORE/CART tabs.
         button.interactable = true;
         button.navigation = new Navigation { mode = Navigation.Mode.None };
+
+        // Use Unity's standard Button click event. InputSystemUIInputModule
+        // dispatches pointer clicks to this event; no EventTrigger or legacy
+        // input polling is required.
         button.onClick.RemoveAllListeners();
-
-        // Route the click through EventSystem's pointer interface as well as
-        // the visual Button component. This remains compatible with
-        // InputSystemUIInputModule and avoids relying on legacy input polling.
-        EventTrigger trigger = go.GetComponent<EventTrigger>();
-        if (trigger == null)
-            trigger = go.AddComponent<EventTrigger>();
-
-        trigger.triggers = new List<EventTrigger.Entry>();
-        EventTrigger.Entry clickEntry = new EventTrigger.Entry
-        {
-            eventID = EventTriggerType.PointerClick
-        };
-        clickEntry.callback.AddListener(eventData =>
-        {
-            if (button != null && button.interactable)
-                action?.Invoke();
-        });
-        trigger.triggers.Add(clickEntry);
+        if (action != null)
+            button.onClick.AddListener(action);
 
         Text text = CreateText(rect, label, 26, FontStyle.Bold,
             Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, foreground);
         text.raycastTarget = false;
         text.enabled = true;
 
-        // Keep the clickable graphic above sibling graphics in the same row.
-        image.raycastTarget = true;
         rect.SetAsLastSibling();
         return button;
     }
