@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class ProductInteraction : MonoBehaviour
@@ -11,23 +11,31 @@ public class ProductInteraction : MonoBehaviour
     public float interactionDistance = 3.5f;
 
     private Rigidbody heldProduct;
-    public bool IsHoldingProduct => isHolding && heldProduct != null;
     private Collider[] productColliders;
-
+    private bool[] originalColliderStates;
     private bool isHolding;
-    void Update()
+
+    public bool IsHoldingProduct => isHolding && heldProduct != null;
+
+    private void Update()
     {
-        // New Input System
-        if (Keyboard.current != null &&
-            Keyboard.current.eKey.wasPressedThisFrame)
-        {
+        // Keyboard support for testing in the Editor.
+        if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
             Interact();
-        }
     }
 
-    void LateUpdate()
+    private void LateUpdate()
     {
-        if (isHolding && heldProduct != null)
+        if (!isHolding)
+            return;
+
+        if (heldProduct == null)
+        {
+            ClearHeldState();
+            return;
+        }
+
+        if (holdPoint != null)
         {
             heldProduct.transform.SetPositionAndRotation(
                 holdPoint.position,
@@ -36,61 +44,64 @@ public class ProductInteraction : MonoBehaviour
         }
     }
 
-    // Mobile Button
+    // Called by the mobile interaction button or the Editor keyboard.
     public void Interact()
     {
-        if (isHolding)
+        if (IsHoldingProduct)
             DropProduct();
         else
-            TryPickupProduct();
+            TryPickupBox();
     }
 
-    void TryPickupProduct()
+    private void TryPickupBox()
     {
-        Ray ray = new Ray(
-            playerCamera.transform.position,
-            playerCamera.transform.forward
-        );
+        if (playerCamera == null || holdPoint == null)
+            return;
 
-        if (Physics.Raycast(
-            ray,
-            out RaycastHit hit,
-            interactionDistance))
-        {
-            Rigidbody product =
-                hit.collider.GetComponentInParent<Rigidbody>();
+        if (!Physics.Raycast(
+                playerCamera.transform.position,
+                playerCamera.transform.forward,
+                out RaycastHit hit,
+                interactionDistance,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
+            return;
 
-            if (product != null)
-            {
-                PickupProduct(product);
-            }
-        }
+        // Do not allow shelves, loose products, or arbitrary Rigidbody objects to be picked up.
+        if (!HasTagInParents(hit.collider.transform, "Box"))
+            return;
+
+        Rigidbody box = hit.collider.GetComponentInParent<Rigidbody>();
+        if (box != null)
+            PickupProduct(box);
     }
 
-    void PickupProduct(Rigidbody product)
+    private void PickupProduct(Rigidbody product)
     {
+        if (product == null || holdPoint == null)
+            return;
+
         heldProduct = product;
-
         isHolding = true;
 
-        productColliders =
-            product.GetComponentsInChildren<Collider>();
+        productColliders = product.GetComponentsInChildren<Collider>(true);
+        originalColliderStates = new bool[productColliders.Length];
+
+        for (int i = 0; i < productColliders.Length; i++)
+        {
+            Collider current = productColliders[i];
+            if (current == null)
+                continue;
+
+            originalColliderStates[i] = current.enabled;
+            current.enabled = false;
+        }
 
         heldProduct.transform.SetParent(null, true);
-
         heldProduct.isKinematic = true;
-
         heldProduct.useGravity = false;
-
         heldProduct.linearVelocity = Vector3.zero;
-
         heldProduct.angularVelocity = Vector3.zero;
-
-        // Disable collisions while holding
-        foreach (Collider col in productColliders)
-        {
-            col.enabled = false;
-        }
 
         heldProduct.transform.SetPositionAndRotation(
             holdPoint.position,
@@ -98,38 +109,60 @@ public class ProductInteraction : MonoBehaviour
         );
     }
 
-    void DropProduct()
+    private void DropProduct()
     {
         if (heldProduct == null)
+        {
+            ClearHeldState();
             return;
+        }
 
-        Vector3 dropPosition =
-            playerCamera.transform.position +
-            playerCamera.transform.forward * 1.5f;
+        Vector3 dropPosition = heldProduct.transform.position;
+        if (playerCamera != null)
+        {
+            dropPosition = playerCamera.transform.position
+                         + playerCamera.transform.forward * 1.5f;
+        }
 
-        heldProduct.transform.SetParent(null);
-
+        heldProduct.transform.SetParent(null, true);
         heldProduct.transform.position = dropPosition;
 
-        // Restore collisions
-        foreach (Collider col in productColliders)
+        if (productColliders != null)
         {
-            if (col != null)
-                col.enabled = true;
+            for (int i = 0; i < productColliders.Length; i++)
+            {
+                if (productColliders[i] != null)
+                    productColliders[i].enabled = originalColliderStates[i];
+            }
         }
 
         heldProduct.isKinematic = false;
-
         heldProduct.useGravity = true;
-
         heldProduct.linearVelocity = Vector3.zero;
-
         heldProduct.angularVelocity = Vector3.zero;
 
+        ClearHeldState();
+    }
+
+    private void ClearHeldState()
+    {
         heldProduct = null;
-
         productColliders = null;
-
+        originalColliderStates = null;
         isHolding = false;
+    }
+
+    private static bool HasTagInParents(Transform target, string tag)
+    {
+        Transform current = target;
+        while (current != null)
+        {
+            if (current.CompareTag(tag))
+                return true;
+
+            current = current.parent;
+        }
+
+        return false;
     }
 }

@@ -1,27 +1,71 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
-public class HoldInteractionButton :
-    MonoBehaviour,
-    IPointerDownHandler,
-    IPointerUpHandler
+public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
 {
     [Header("References")]
     public Camera playerCamera;
     public ProductInteraction productInteraction;
     public FurnitureController furnitureController;
+    public Image holdProgressImage;
 
     [Header("Settings")]
     public float longPressDuration = 1f;
     public float interactionDistance = 4f;
 
     private bool isPressing;
+    private bool holdTriggered;
+    private bool startedWhileHoldingShelf;
     private float pressStartTime;
+    private ShelfPlacement targetShelf;
+
+    private void Awake() => SetProgress(0f);
+
+    private void Update()
+    {
+        if (!isPressing || startedWhileHoldingShelf || targetShelf == null || holdTriggered)
+            return;
+
+        if (GetShelfUnderAim() != targetShelf)
+        {
+            targetShelf = null;
+            SetProgress(0f);
+            return;
+        }
+
+        float progress = longPressDuration <= 0f
+            ? 1f
+            : Mathf.Clamp01((Time.unscaledTime - pressStartTime) / longPressDuration);
+
+        SetProgress(progress);
+
+        // Pick up automatically when the hold timer finishes; no finger release needed.
+        if (progress >= 1f)
+        {
+            furnitureController.HoldButton();
+            holdTriggered = true;
+            targetShelf = null;
+            SetProgress(0f);
+        }
+    }
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        if (playerCamera == null || productInteraction == null || furnitureController == null)
+            return;
+
         isPressing = true;
+        holdTriggered = false;
         pressStartTime = Time.unscaledTime;
+        startedWhileHoldingShelf = furnitureController.IsHoldingShelf;
+        targetShelf = null;
+        SetProgress(0f);
+
+        if (startedWhileHoldingShelf || productInteraction.IsHoldingProduct)
+            return;
+
+        targetShelf = GetShelfUnderAim();
     }
 
     public void OnPointerUp(PointerEventData eventData)
@@ -30,77 +74,68 @@ public class HoldInteractionButton :
             return;
 
         isPressing = false;
+        SetProgress(0f);
 
-        float pressDuration =
-            Time.unscaledTime - pressStartTime;
+        if (holdTriggered)
+        {
+            targetShelf = null;
+            return;
+        }
 
-        HandleInteraction(pressDuration);
-    }
+        targetShelf = null;
 
-    void HandleInteraction(float duration)
-    {
-        // اللاعب ماسك رف بالفعل
-        if (furnitureController.IsHoldingShelf)
+        if (startedWhileHoldingShelf)
         {
             furnitureController.HoldButton();
             return;
         }
 
-        // اللاعب ماسك منتج بالفعل
-        if (productInteraction.IsHoldingProduct)
-        {
+        // Boxes use a normal tap. Releasing an incomplete shelf hold does nothing.
+        if (productInteraction.IsHoldingProduct || IsBoxUnderAim())
             productInteraction.Interact();
-            return;
-        }
-
-        // تحديد العنصر أمام اللاعب
-        Ray ray = new Ray(
-            playerCamera.transform.position,
-            playerCamera.transform.forward
-        );
-
-        if (!Physics.Raycast(
-            ray,
-            out RaycastHit hit,
-            interactionDistance))
-            return;
-
-        bool isShelf = HasTagInParents(hit.transform, "Shelf");
-
-        bool isBox = HasTagInParents(hit.transform, "Box");
-
-        bool isProduct = HasTagInParents(hit.transform, "Product");
-
-        // الرف يحتاج ضغط مطول
-        if (isShelf)
-        {
-            if (duration >= longPressDuration)
-            {
-                furnitureController.HoldButton();
-            }
-
-            return;
-        }
-
-        // الكرتونة والمنتج بضغطة واحدة
-        if (isBox || isProduct)
-        {
-            productInteraction.Interact();
-        }
     }
 
-    bool HasTagInParents(Transform target, string tag)
+    private ShelfPlacement GetShelfUnderAim()
     {
-        Transform current = target;
+        if (playerCamera == null)
+            return null;
 
+        if (!Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward,
+                out RaycastHit hit, interactionDistance, Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
+            return null;
+
+        ShelfPlacement shelf = hit.collider.GetComponentInParent<ShelfPlacement>();
+        return shelf == null || shelf.IsHeld() ? null : shelf;
+    }
+
+    private bool IsBoxUnderAim()
+    {
+        if (playerCamera == null)
+            return false;
+
+        if (!Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward,
+                out RaycastHit hit, interactionDistance, Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore))
+            return false;
+
+        Transform current = hit.collider.transform;
         while (current != null)
         {
-            if (current.tag == tag)
+            if (current.CompareTag("Box"))
                 return true;
-
             current = current.parent;
         }
 
         return false;
+    }
+
+    private void SetProgress(float value)
+    {
+        if (holdProgressImage == null)
+            return;
+
+        holdProgressImage.fillAmount = value;
+        holdProgressImage.enabled = value > 0f;
     }
 }
