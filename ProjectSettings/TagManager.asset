@@ -14,6 +14,7 @@ TagManager:
   - Box
   - ShelfFloor
   - ShelfWall
+  - ShelfZone
   layers:
   - Default
   - TransparentFX
