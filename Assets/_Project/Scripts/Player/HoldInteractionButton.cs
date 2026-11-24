@@ -24,7 +24,8 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
 
     private void Update()
     {
-        if (!isPressing || startedWhileHoldingShelf || targetShelf == null || holdTriggered)
+        if (!isPressing || startedWhileHoldingShelf || targetShelf == null || holdTriggered
+            || (productInteraction != null && productInteraction.IsHoldingProduct))
             return;
 
         if (GetShelfUnderAim() != targetShelf)
@@ -91,13 +92,10 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
             return;
         }
 
-        // When carrying a box, aiming at a shelf places it there.
-        // Otherwise the existing normal drop behavior is preserved.
+        // While carrying a carton, a tap only opens it. It never drops or places it.
         if (productInteraction.IsHoldingProduct)
         {
-            if (!productInteraction.TryPlaceHeldProductOnShelf())
-                productInteraction.Interact();
-
+            productInteraction.Interact();
             return;
         }
 
