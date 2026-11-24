@@ -7348,6 +7348,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2300000002}
   - component: {fileID: 2300000003}
+  - component: {fileID: 2300000004}
   m_Layer: 0
   m_Name: DayNightCycle
   m_TagString: Untagged
@@ -7382,7 +7383,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8c1d73f2e6b4a1d9f0c5b7e8a2d6143, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DayNightCycle
-  startHour: 1
+  startHour: 9
   endHour: 21
   dayLengthMinutes: 12
   timeScale: 1
@@ -7394,6 +7395,20 @@ MonoBehaviour:
   nightLights: []
   moonColor: {r: 0.55, g: 0.65, b: 1, a: 1}
   skyboxMaterial: {fileID: 0}
+--- !u!114 &2300000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2300000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c5e8a1b74d2f4a6c9b0e3d7f8126a540, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GameClockUI
+  panelSize: {x: 230, y: 104}
+  screenPadding: {x: 24, y: 24}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
