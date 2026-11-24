@@ -41,6 +41,7 @@ public class ProductBox : MonoBehaviour
     private Vector3 cartonSize;
     private float fittedProductWidth;
     private float fittedProductDepth;
+    private Vector3 fittedProductCenterOffset;
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
@@ -186,12 +187,15 @@ public class ProductBox : MonoBehaviour
             fittedProductWidth = Mathf.Max(0.01f, bounds.size.x);
             fittedProductDepth = Mathf.Max(0.01f, bounds.size.z);
             productHeight = Mathf.Max(0.01f, bounds.size.y);
+            // Compensate for prefabs whose pivot is not at the visual center.
+            fittedProductCenterOffset = sample.transform.InverseTransformPoint(bounds.center);
         }
         else
         {
             fittedProductWidth = productFootprint;
             fittedProductDepth = productFootprint;
             productHeight = Mathf.Max(0.01f, productHeight);
+            fittedProductCenterOffset = Vector3.zero;
             Debug.LogWarning("Product prefab has no Renderer; using the fallback carton dimensions.", productData);
         }
 
@@ -215,13 +219,16 @@ public class ProductBox : MonoBehaviour
             int col = indexInLayer % cols;
             int row = indexInLayer / cols;
 
-            Vector3 localPosition = new Vector3(
+            Vector3 visualCenter = new Vector3(
                 -innerX * 0.5f + fittedProductWidth * 0.5f + col * (fittedProductWidth + productSpacing),
                 -cartonSize.y * 0.5f + wallThickness + padding + productHeight * (layer + 0.5f),
                 -innerZ * 0.5f + fittedProductDepth * 0.5f + row * (fittedProductDepth + productSpacing));
 
-            display.transform.localPosition = localPosition;
-            display.transform.localRotation = Quaternion.Euler(productData.rotation);
+            Quaternion productRotation = Quaternion.Euler(productData.rotation);
+            Vector3 pivotToVisualCenter = productRotation * Vector3.Scale(
+                productData.productPrefab.transform.localScale, fittedProductCenterOffset);
+            display.transform.localPosition = visualCenter - pivotToVisualCenter;
+            display.transform.localRotation = productRotation;
             display.transform.localScale = productData.productPrefab.transform.localScale;
             display.SetActive(showProductModelsBeforeOpening || isOpen);
             productDisplays.Add(display);
