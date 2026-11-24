@@ -590,11 +590,18 @@ public class ComputerShopUI : MonoBehaviour
         image.raycastTarget = true;
         Button button = go.GetComponent<Button>();
         button.targetGraphic = image;
+        // Keep the same reliable Button setup used by the working STORE/CART tabs.
+        button.interactable = true;
+        button.onClick.RemoveAllListeners();
         button.onClick.AddListener(action);
 
         Text text = CreateText(rect, label, 26, FontStyle.Bold,
             Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, foreground);
         text.raycastTarget = false;
+        text.enabled = true;
+
+        // Ensure the button itself receives pointer events, not its label.
+        image.raycastTarget = true;
         return button;
     }
 }
