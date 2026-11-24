@@ -132,8 +132,8 @@ public class ProductBox : MonoBehaviour
             new Vector3(halfX - t * 0.5f, 0f, 0f));
 
         // Two hinged top flaps.
-        leftFlap = CreateFlap("LeftFlap", -halfX, halfY, cartonSize.x * 0.5f, t);
-        rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t);
+        leftFlap = CreateFlap("LeftFlap", -halfX, halfY, cartonSize.x * 0.5f, t, 1f);
+        rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t, -1f);
 
         // Keep the physical collider in sync with the generated carton.
         BoxCollider boxCollider = GetComponent<BoxCollider>();
@@ -174,7 +174,7 @@ public class ProductBox : MonoBehaviour
         }
     }
 
-    private Transform CreateFlap(string flapName, float hingeX, float topY, float flapWidth, float thickness)
+    private Transform CreateFlap(string flapName, float hingeX, float topY, float flapWidth, float thickness, float direction)
     {
         Transform pivot = new GameObject(flapName).transform;
         pivot.SetParent(visualRoot, false);
@@ -183,7 +183,7 @@ public class ProductBox : MonoBehaviour
         GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
         panel.name = "CardboardPanel";
         panel.transform.SetParent(pivot, false);
-        panel.transform.localPosition = new Vector3(flapWidth * 0.5f, 0f, 0f);
+        panel.transform.localPosition = new Vector3(direction * flapWidth * 0.5f, 0f, 0f);
         panel.transform.localScale = new Vector3(flapWidth, thickness, cartonSize.z);
         ApplyCartonMaterial(panel);
         return pivot;
