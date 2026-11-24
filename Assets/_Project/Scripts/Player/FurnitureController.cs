@@ -49,6 +49,8 @@ public class FurnitureController : MonoBehaviour
         if (shelf == null || shelf.IsHeld())
             return;
 
+        // The shelf can come from its own prefab/scene, so inject the active player camera when picked up.
+        shelf.playerCamera = playerCamera;
         shelf.PickUp();
         heldShelf = shelf;
     }
