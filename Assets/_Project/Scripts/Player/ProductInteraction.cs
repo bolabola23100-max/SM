@@ -13,7 +13,7 @@ public class ProductInteraction : MonoBehaviour
     public float placementSurfaceOffset = 0.015f;
 
     [Tooltip("Position of the held carton relative to the camera: X right, Y up, Z forward. Negative Y keeps it below the aiming point.")]
-    public Vector3 heldBoxCameraOffset = new Vector3(0f, -0.48f, 1.35f);
+    public Vector3 heldBoxCameraOffset = new Vector3(0f, -0.42f, 1.9f);
 
     private Rigidbody heldProduct;
     private Collider[] productColliders;
@@ -46,7 +46,18 @@ public class ProductInteraction : MonoBehaviour
                 + cam.right * heldBoxCameraOffset.x
                 + cam.up * heldBoxCameraOffset.y
                 + cam.forward * heldBoxCameraOffset.z;
+
+            // Keep the carton top at a fixed point below screen center.
+            // Larger cartons are shifted down automatically, rather than rising
+            // into the aiming area.
             heldProduct.transform.SetPositionAndRotation(heldPosition, cam.rotation);
+            BoxCollider boxCollider = heldProduct.GetComponent<BoxCollider>();
+            if (boxCollider != null)
+            {
+                float halfHeight = boxCollider.bounds.extents.y;
+                heldPosition -= cam.up * halfHeight;
+                heldProduct.transform.position = heldPosition;
+            }
         }
         else if (holdPoint != null)
         {
@@ -96,6 +107,15 @@ public class ProductInteraction : MonoBehaviour
         ProductData data = box.Data;
         if (data == null || data.productPrefab == null)
             return false;
+
+        // The shelf limit is defined by this product's columns x rows x layers.
+        // Do not allow another item to spill into an extra layer.
+        int shelfLimit = data.ShelfLimit;
+        if (zone.ProductCount >= shelfLimit)
+        {
+            Debug.Log($"Shelf zone is full for {data.productName}. Capacity: {shelfLimit}.");
+            return false;
+        }
 
         GameObject product = box.TakeOne();
         if (product == null)
