@@ -104,6 +104,13 @@ public class ComputerInteraction : MonoBehaviour
         isTransitioning = true;
     }
 
+    /// <summary>Called by the monitor's on-screen EXIT COMPUTER button.</summary>
+    public void ExitComputer()
+    {
+        if (isFocused || isTransitioning)
+            ReturnToPlayerView();
+    }
+
     private void ReturnToPlayerView()
     {
         targetCameraPosition = originalCameraPosition;
