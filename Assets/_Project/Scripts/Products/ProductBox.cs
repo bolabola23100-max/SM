@@ -56,9 +56,19 @@ public class ProductBox : MonoBehaviour
     public void SetProduct(ProductData data, int amount = -1)
     {
         productData = data;
-        remainingCount = amount > 0
-            ? amount
-            : (data != null ? Mathf.Max(1, data.packSize) : 0);
+        if (amount > 0)
+        {
+            useProductPackSize = false;
+            customCount = amount;
+        }
+        else
+        {
+            useProductPackSize = true;
+        }
+
+        remainingCount = data != null
+            ? (useProductPackSize ? Mathf.Max(1, data.packSize) : Mathf.Max(1, customCount))
+            : 0;
 
         if (Application.isPlaying)
             BuildCarton();
