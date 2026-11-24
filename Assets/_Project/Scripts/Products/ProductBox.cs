@@ -94,13 +94,17 @@ public class ProductBox : MonoBehaviour
 
         MeasureProductDimensions();
 
-        columns = Mathf.Max(1, columns);
-        rows = Mathf.Max(1, rows);
+        // Use the layout configured for this product instead of the generic
+        // 3x2 prefab defaults. This keeps the purchased carton consistent with
+        // the product's intended packing layout (including its layer count).
+        columns = productData != null ? Mathf.Max(1, productData.columns) : Mathf.Max(1, columns);
+        rows = productData != null ? Mathf.Max(1, productData.rows) : Mathf.Max(1, rows);
 
-        // A pack can contain more than one layer. The selected product is the
-        // actual prefab referenced by the ProductData asset.
         int perLayer = columns * rows;
-        int layers = Mathf.CeilToInt((float)remainingCount / perLayer);
+        int requiredLayers = Mathf.CeilToInt((float)remainingCount / perLayer);
+        int layers = productData != null
+            ? Mathf.Max(Mathf.Max(1, productData.layers), requiredLayers)
+            : requiredLayers;
 
         float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
         float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
