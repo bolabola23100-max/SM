@@ -6,24 +6,28 @@ public class PlacementChecker : MonoBehaviour
     public ShelfPlacement shelf;
 
     [Header("Detection")]
-    [Tooltip("Layers that should prevent shelf placement, such as Furniture and Environment.")]
-    public LayerMask blockingLayers;
+    [Tooltip("Layers occupied by walls, furniture and other obstacles. The tagged floor is always allowed.")]
+    public LayerMask blockingLayers = ~0;
 
     [Header("Required Surface Tags")]
     public string floorTag = "ShelfFloor";
     public string wallTag = "ShelfWall";
 
     [Header("Settings")]
-    public float checkInterval = 0.05f;
-    [Range(0.5f, 0.95f)] public float floorSampleInset = 0.8f;
-    public float floorRayStartOffset = 0.5f;
-    public float floorRayExtraDistance = 2f;
+    [Min(0.02f)] public float checkInterval = 0.05f;
+    [Range(0.5f, 0.98f)] public float floorSampleInset = 0.85f;
+    public float floorRayStartOffset = 0.25f;
+    public float floorRayExtraDistance = 3f;
+    [Range(0.8f, 1f)] public float overlapInset = 0.96f;
 
     private float timer;
     private Collider shelfCollider;
 
     private void Awake()
     {
+        if (shelf == null)
+            shelf = GetComponent<ShelfPlacement>();
+
         if (shelf == null)
         {
             Debug.LogError("PlacementChecker: ShelfPlacement reference is missing.", this);
@@ -34,24 +38,22 @@ public class PlacementChecker : MonoBehaviour
         shelfCollider = shelf.placementCollider;
         if (shelfCollider == null)
         {
-            Debug.LogError("PlacementChecker: Placement Collider reference is missing on the shelf.", this);
+            Debug.LogError("PlacementChecker: Assign the shelf's BoxCollider as Placement Collider.", this);
             enabled = false;
+            return;
         }
     }
 
     private void Update()
     {
-        if (shelf == null || shelfCollider == null)
-            return;
-
-        if (!shelf.IsHeld())
+        if (shelf == null || shelfCollider == null || !shelf.IsHeld())
         {
             timer = 0f;
             return;
         }
 
         timer += Time.deltaTime;
-        if (timer >= Mathf.Max(0.02f, checkInterval))
+        if (timer >= checkInterval)
         {
             timer = 0f;
             CheckPlacement();
@@ -60,12 +62,9 @@ public class PlacementChecker : MonoBehaviour
 
     private void CheckPlacement()
     {
-        if (!shelfCollider.enabled)
-        {
-            shelf.SetPlacementValidity(false);
-            return;
-        }
+        Physics.SyncTransforms();
 
+        Bounds bounds = shelfCollider.bounds;
         Vector3 center;
         Vector3 halfExtents;
         Quaternion orientation;
@@ -73,71 +72,55 @@ public class PlacementChecker : MonoBehaviour
         if (shelfCollider is BoxCollider box)
         {
             Vector3 scale = box.transform.lossyScale;
-            Vector3 absoluteScale = new Vector3(
-                Mathf.Abs(scale.x),
-                Mathf.Abs(scale.y),
-                Mathf.Abs(scale.z)
-            );
-
+            Vector3 absScale = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
             center = box.transform.TransformPoint(box.center);
-            halfExtents = Vector3.Scale(box.size * 0.5f, absoluteScale) * 0.95f;
+            halfExtents = Vector3.Scale(box.size * 0.5f, absScale) * overlapInset;
             orientation = box.transform.rotation;
         }
         else
         {
-            Bounds bounds = shelfCollider.bounds;
             center = bounds.center;
-            halfExtents = bounds.extents * 0.95f;
+            halfExtents = bounds.extents * overlapInset;
             orientation = Quaternion.identity;
         }
 
-        Physics.SyncTransforms();
-
-        // The shelf must have the supermarket floor underneath its footprint.
-        if (!HasFloorUnderShelf(center, halfExtents, orientation))
+        if (!HasFloorUnderShelf(center, halfExtents, orientation, bounds))
         {
             shelf.SetPlacementValidity(false);
             return;
         }
 
-        // Check all colliders. The floor is allowed; tagged walls and blocking layers are not.
         Collider[] hits = Physics.OverlapBox(
-            center,
-            halfExtents,
-            orientation,
-            ~0,
-            QueryTriggerInteraction.Ignore
+            center, halfExtents, orientation, blockingLayers, QueryTriggerInteraction.Ignore
         );
-
-        bool valid = true;
 
         foreach (Collider hit in hits)
         {
-            if (hit == null || hit == shelfCollider)
+            if (hit == null || IsPartOfShelf(hit.transform))
                 continue;
 
-            if (hit.transform == shelf.transform || hit.transform.IsChildOf(shelf.transform))
+            // A collider tagged as the floor (even if the tag is on its parent) is allowed.
+            if (HasTagInParents(hit.transform, floorTag))
                 continue;
 
-            if (hit.CompareTag(floorTag))
-                continue;
-
-            bool isWall = hit.CompareTag(wallTag);
-            bool isBlockingLayer = (blockingLayers.value & (1 << hit.gameObject.layer)) != 0;
-
-            if (isWall || isBlockingLayer)
+            // Any wall is forbidden, regardless of its layer.
+            if (HasTagInParents(hit.transform, wallTag))
             {
-                valid = false;
-                break;
+                shelf.SetPlacementValidity(false);
+                return;
             }
+
+            // Any other collider included in Blocking Layers blocks placement.
+            shelf.SetPlacementValidity(false);
+            return;
         }
 
-        shelf.SetPlacementValidity(valid);
+        shelf.SetPlacementValidity(true);
     }
 
-    private bool HasFloorUnderShelf(Vector3 center, Vector3 halfExtents, Quaternion orientation)
+    private bool HasFloorUnderShelf(Vector3 center, Vector3 halfExtents, Quaternion orientation, Bounds bounds)
     {
-        Vector3[] localOffsets =
+        Vector3[] offsets =
         {
             new Vector3(-halfExtents.x * floorSampleInset, 0f, -halfExtents.z * floorSampleInset),
             new Vector3(-halfExtents.x * floorSampleInset, 0f,  halfExtents.z * floorSampleInset),
@@ -146,62 +129,70 @@ public class PlacementChecker : MonoBehaviour
             Vector3.zero
         };
 
-        Bounds bounds = shelfCollider.bounds;
-        float rayDistance = bounds.size.y + floorRayExtraDistance;
+        float rayDistance = bounds.size.y + floorRayStartOffset + floorRayExtraDistance;
 
-        foreach (Vector3 localOffset in localOffsets)
+        foreach (Vector3 offset in offsets)
         {
-            Vector3 sample = center + orientation * localOffset;
-            Vector3 rayOrigin = new Vector3(
-                sample.x,
-                bounds.max.y + floorRayStartOffset,
-                sample.z
-            );
+            Vector3 point = center + orientation * offset;
+            Vector3 origin = new Vector3(point.x, bounds.max.y + floorRayStartOffset, point.z);
 
             RaycastHit[] hits = Physics.RaycastAll(
-                rayOrigin,
-                Vector3.down,
-                rayDistance,
-                ~0,
-                QueryTriggerInteraction.Ignore
+                origin, Vector3.down, rayDistance, ~0, QueryTriggerInteraction.Ignore
             );
 
             bool foundFloor = false;
+            float nearestDistance = float.MaxValue;
 
             foreach (RaycastHit hit in hits)
             {
-                if (hit.collider != null && hit.collider.CompareTag(floorTag))
+                if (hit.collider == null || IsPartOfShelf(hit.collider.transform))
+                    continue;
+
+                if (hit.distance < nearestDistance && HasTagInParents(hit.collider.transform, floorTag))
                 {
+                    nearestDistance = hit.distance;
                     foundFloor = true;
-                    break;
                 }
             }
 
-            if (!foundFloor)
-                return false;
+            if (!foundFloor) return false;
         }
 
         return true;
     }
 
+    private bool IsPartOfShelf(Transform target)
+    {
+        return target == shelf.transform || target.IsChildOf(shelf.transform);
+    }
+
+    private static bool HasTagInParents(Transform target, string tag)
+    {
+        Transform current = target;
+        while (current != null)
+        {
+            if (current.CompareTag(tag)) return true;
+            current = current.parent;
+        }
+        return false;
+    }
+
     private void OnDrawGizmosSelected()
     {
-        if (shelf == null || shelf.placementCollider == null)
-            return;
+        if (shelf == null || shelf.placementCollider == null) return;
 
         Gizmos.color = Color.cyan;
-
         if (shelf.placementCollider is BoxCollider box)
         {
-            Matrix4x4 previousMatrix = Gizmos.matrix;
+            Matrix4x4 old = Gizmos.matrix;
             Gizmos.matrix = box.transform.localToWorldMatrix;
             Gizmos.DrawWireCube(box.center, box.size);
-            Gizmos.matrix = previousMatrix;
+            Gizmos.matrix = old;
         }
         else
         {
-            Bounds bounds = shelf.placementCollider.bounds;
-            Gizmos.DrawWireCube(bounds.center, bounds.size);
+            Bounds b = shelf.placementCollider.bounds;
+            Gizmos.DrawWireCube(b.center, b.size);
         }
     }
 }
