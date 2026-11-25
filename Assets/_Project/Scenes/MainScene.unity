@@ -4366,7 +4366,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0.5}
   m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: -120.2, y: 0}
+  m_AnchoredPosition: {x: -120.200195, y: 0}
   m_SizeDelta: {x: 140, y: 140}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1167659518
@@ -7778,7 +7778,7 @@ MonoBehaviour:
   playerMovement: {fileID: 2048202604}
   screenSurface: {fileID: 2034020218}
   interactionDistance: 3.5
-  focusDistanceFromScreen: 0.65
+  focusDistanceFromScreen: 0.5
   detectionMask:
     serializedVersion: 2
     m_Bits: 1011
@@ -7806,6 +7806,23 @@ MonoBehaviour:
   screenWorldWidth: 0.65
   surfaceOffset: 0.012
   panelSize: {x: 900, y: 620}
+  hideWhileFocused:
+  - {fileID: 750347502}
+  - {fileID: 1725785488}
+  - {fileID: 2123310199}
+  - {fileID: 40213419}
+  - {fileID: 1692499819}
+  - {fileID: 1941945857}
+  - {fileID: 2200000001}
+  - {fileID: 2300000010}
+  - {fileID: 1167659516}
+  unlockCursorWhileFocused: 0
+  dragThreshold: 40
+  debugPointer: 0
+  cartonsPerRow: 3
+  cartonSpacingX: 0.8
+  cartonSpacingZ: 0.8
+  spawnLift: 0.15
 --- !u!1 &2048718089 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3833112069128906168, guid: bd229679de39c054e9271beb3ae6360a, type: 3}

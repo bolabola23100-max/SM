@@ -14,4 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ProductDatabase
   products:
   - {fileID: 11400000, guid: bb4f6ac1f6669e447b4e43e98a784c33, type: 2}
+  - {fileID: 11400000, guid: b8c5f65d13074984098ff0a7fe5b8d95, type: 2}
+  - {fileID: 11400000, guid: 32145a05bfaf7a64d84f28100f8dd3a7, type: 2}
+  - {fileID: 11400000, guid: 22be14506bd5d56408f82bd7b9aa6600, type: 2}
+  - {fileID: 11400000, guid: 625171e142c34a240b8c774a701e7e0a, type: 2}
+  - {fileID: 11400000, guid: 467f49437217baf4fb6fd79cdd27a814, type: 2}
+  - {fileID: 11400000, guid: 8f70b1c3e037d0a438886c9dbbcea4f4, type: 2}
   sellPriceOverrides: []
