@@ -86,7 +86,7 @@ public class ComputerShopUI : MonoBehaviour
 
     private void Awake()
     {
-        balance = startingBalance;
+        balance = MoneyManager.Instance != null ? MoneyManager.Instance.Balance : startingBalance;
         EnsureEventSystem();
         BuildInterface();
         if (canvas != null)
@@ -539,7 +539,10 @@ public class ComputerShopUI : MonoBehaviour
             return;
         }
 
-        float total = CalculateCartTotal();
+        float rawTotal = CalculateCartTotal();
+        MoneyManager money = MoneyManager.Instance;
+        float total = money != null ? money.ApplySupplierDiscount(rawTotal) : rawTotal;
+        balance = money != null ? money.Balance : balance;
         if (balance < total)
         {
             SetStatus("INSUFFICIENT FUNDS. REQUIRED: " + total.ToString("0.##") +
@@ -557,7 +560,15 @@ public class ComputerShopUI : MonoBehaviour
             }
         }
 
-        balance -= total;
+        if (money != null)
+        {
+            if (!money.TryPurchaseStock(rawTotal, "Supplier stock order", out total))
+            {
+                SetStatus("INSUFFICIENT FUNDS."); RefreshHeader(); return;
+            }
+            balance = money.Balance;
+        }
+        else balance -= total;
         int cartonIndex = 0;
         int perRow = Mathf.Max(1, cartonsPerRow);
 
@@ -570,7 +581,7 @@ public class ComputerShopUI : MonoBehaviour
             {
                 productName = data.productName,
                 quantity = count,
-                total = data.PackCost * count,
+                total = money != null ? money.ApplySupplierDiscount(data.PackCost * count) : data.PackCost * count,
                 time = DateTime.Now.ToString("HH:mm")
             });
 
@@ -610,7 +621,7 @@ public class ComputerShopUI : MonoBehaviour
         cart.Clear();
         RefreshHeader();
         ShowPage("Orders");
-        SetStatus("ORDER CONFIRMED. CARTONS SENT TO THE DELIVERY POINT.");
+        SetStatus("ORDER CONFIRMED. " + (rawTotal > total ? "SUPPLIER DISCOUNT APPLIED. " : "") + "CARTONS SENT TO THE DELIVERY POINT.");
     }
 
     private float CalculateCartTotal()
