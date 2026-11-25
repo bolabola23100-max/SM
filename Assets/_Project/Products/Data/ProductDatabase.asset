@@ -20,4 +20,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 625171e142c34a240b8c774a701e7e0a, type: 2}
   - {fileID: 11400000, guid: 467f49437217baf4fb6fd79cdd27a814, type: 2}
   - {fileID: 11400000, guid: 8f70b1c3e037d0a438886c9dbbcea4f4, type: 2}
+  - {fileID: 11400000, guid: e89f60b27d96fae4e84249b1f8ac2697, type: 2}
+  - {fileID: 11400000, guid: dfbdb96000d230840befd32a75fa7d25, type: 2}
+  - {fileID: 11400000, guid: b5292f9a0248f5346800e64e2f5c7f42, type: 2}
+  - {fileID: 11400000, guid: d82852d0064abac41b9c727c8600e738, type: 2}
+  - {fileID: 11400000, guid: 9df4afc28edf74049a0ac72070b46140, type: 2}
   sellPriceOverrides: []

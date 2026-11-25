@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ProductData
   productId: cheddar_cheese_slices
   productName: cheddar_cheese_slices
-  category: 0
+  category: 1
   productPrefab: {fileID: 5250593667892023035, guid: 0228aa5e6558f154c8e93da41d679dce, type: 3}
   buyPrice: 1
   marketPrice: 5

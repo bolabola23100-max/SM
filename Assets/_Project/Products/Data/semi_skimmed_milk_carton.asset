@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ProductData
   productId: semi_skimmed_milk_carton
   productName: semi_skimmed_milk_carton
-  category: 0
+  category: 1
   productPrefab: {fileID: 2008268058090914335, guid: ec60c6c4f9c217044be5f5fc52ff25b7, type: 3}
   buyPrice: 2
   marketPrice: 3.3
