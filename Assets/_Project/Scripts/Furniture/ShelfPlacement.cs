@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ShelfPlacement : MonoBehaviour
@@ -21,6 +22,9 @@ public class ShelfPlacement : MonoBehaviour
     private Quaternion originalRotation;
     private float currentRotation;
     private Rigidbody rb;
+
+    private sealed class ProductPose { public Transform product; public Vector3 localPosition; public Quaternion localRotation; public Rigidbody body; public bool wasKinematic; public bool usedGravity; }
+    private readonly List<ProductPose> heldProducts = new List<ProductPose>();
 
     private Renderer[] shelfRenderers;
     private Material[][] originalMaterials;
@@ -59,7 +63,7 @@ public class ShelfPlacement : MonoBehaviour
 
     private void Update()
     {
-        if (isHeld) MoveShelf();
+        if (isHeld) { MoveShelf(); UpdateHeldProducts(); }
     }
 
     private void MoveShelf()
@@ -89,6 +93,7 @@ public class ShelfPlacement : MonoBehaviour
         currentRotation = transform.eulerAngles.y;
         isHeld = true;
         canPlace = false;
+        CaptureShelfProducts();
 
         if (rb != null)
         {
@@ -108,6 +113,9 @@ public class ShelfPlacement : MonoBehaviour
     {
         if (!isHeld || !canPlace) return;
 
+        UpdateHeldProducts();
+        RestoreProductPhysics();
+        heldProducts.Clear();
         isHeld = false;
         RestoreOriginalAppearance();
 
@@ -123,6 +131,9 @@ public class ShelfPlacement : MonoBehaviour
         if (!isHeld) return;
 
         transform.SetPositionAndRotation(originalPosition, originalRotation);
+        UpdateHeldProducts();
+        RestoreProductPhysics();
+        heldProducts.Clear();
         isHeld = false;
         canPlace = false;
         RestoreOriginalAppearance();
@@ -187,6 +198,53 @@ public class ShelfPlacement : MonoBehaviour
             foreach (Material material in group)
                 if (material != null) Destroy(material);
         }
+    }
+
+
+    private void CaptureShelfProducts()
+    {
+        heldProducts.Clear();
+        HashSet<Transform> unique = new HashSet<Transform>();
+        foreach (ShelfZone zone in GetComponentsInChildren<ShelfZone>(true))
+        {
+            if (zone == null) continue;
+            foreach (Transform product in zone.Products)
+            {
+                if (product == null || !unique.Add(product)) continue;
+                ProductPose pose = new ProductPose
+                {
+                    product = product,
+                    localPosition = transform.InverseTransformPoint(product.position),
+                    localRotation = Quaternion.Inverse(transform.rotation) * product.rotation,
+                    body = product.GetComponent<Rigidbody>()
+                };
+                if (pose.body != null)
+                {
+                    pose.wasKinematic = pose.body.isKinematic;
+                    pose.usedGravity = pose.body.useGravity;
+                    pose.body.isKinematic = true;
+                    pose.body.useGravity = false;
+                }
+                heldProducts.Add(pose);
+            }
+        }
+    }
+
+    private void UpdateHeldProducts()
+    {
+        foreach (ProductPose pose in heldProducts)
+            if (pose != null && pose.product != null)
+                pose.product.SetPositionAndRotation(transform.TransformPoint(pose.localPosition), transform.rotation * pose.localRotation);
+    }
+
+    private void RestoreProductPhysics()
+    {
+        foreach (ProductPose pose in heldProducts)
+            if (pose != null && pose.product != null && pose.body != null)
+            {
+                pose.body.isKinematic = pose.wasKinematic;
+                pose.body.useGravity = pose.usedGravity;
+            }
     }
 
     public bool IsHeld() => isHeld;
