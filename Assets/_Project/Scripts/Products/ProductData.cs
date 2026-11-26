@@ -13,6 +13,10 @@ public class ProductData : ScriptableObject
     [Header("Prefab")]
     public GameObject productPrefab;
 
+    [Header("Shop Display")]
+    [Tooltip("Small transparent product image used in computer shop, cart, and order UI.")]
+    public Sprite productIcon;
+
     [Header("Prices")]
     [Min(0f)] public float buyPrice = 1f;
     [Min(0f)] public float marketPrice = 5f;
