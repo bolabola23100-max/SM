@@ -23,6 +23,7 @@ public class ShelfZone : MonoBehaviour
     private readonly HashSet<Transform> products = new HashSet<Transform>();
 
     public int ProductCount => products.Count;
+    public ProductData StoredProductData => GetStoredProductData();
     public int MaxProducts => maxProducts;
     public bool IsFull => maxProducts > 0 && products.Count >= maxProducts;
     public IReadOnlyCollection<Transform> Products => products;
@@ -100,10 +101,31 @@ public class ShelfZone : MonoBehaviour
             ProductExited?.Invoke(this, product);
     }
 
+    public bool CanAcceptData(ProductData data)
+    {
+        if (data == null || data.category != acceptedCategory)
+            return false;
+
+        ProductData storedData = GetStoredProductData();
+        return storedData == null || storedData == data;
+    }
+
+    private ProductData GetStoredProductData()
+    {
+        foreach (Transform existing in products)
+        {
+            if (existing == null) continue;
+            ProductItem item = existing.GetComponent<ProductItem>();
+            if (item != null && item.Data != null)
+                return item.Data;
+        }
+        return null;
+    }
+
     private bool CanAccept(Transform product)
     {
         ProductItem item = product.GetComponent<ProductItem>();
-        return item != null && item.Data != null && item.Category == acceptedCategory;
+        return item != null && CanAcceptData(item.Data);
     }
 
     public void SetMaxProducts(int amount)
