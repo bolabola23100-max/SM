@@ -215,7 +215,8 @@ public class ProductInteraction : MonoBehaviour
         if (shelf == null || shelf.IsHeld())
             return false;
 
-        ProductBox box = heldProduct.GetComponent<ProductBox>();\n        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box != null && box.Data != null ? box.Data.category : ProductCategory.Shelf);
+        ProductBox box = heldProduct.GetComponent<ProductBox>();
+        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box != null && box.Data != null ? box.Data.category : ProductCategory.Shelf);
         if (zone == null)
         {
             Debug.LogWarning("Shelf placement failed: no ShelfZone was found under this shelf.");
@@ -244,7 +245,7 @@ public class ProductInteraction : MonoBehaviour
                 continue;
 
             BoxCollider zoneCollider = candidate.GetComponent<BoxCollider>();
-            if (zoneCollider == null || !zoneCollider.enabled)
+            if (zoneCollider == null || !zoneCollider.enabled || candidate.AcceptedCategory != requiredCategory)
                 continue;
 
             Bounds bounds = zoneCollider.bounds;
