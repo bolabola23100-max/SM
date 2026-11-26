@@ -100,7 +100,7 @@ public class ProductInteraction : MonoBehaviour
         if (shelf == null || shelf.IsHeld())
             return false;
 
-        ShelfZone zone = FindBestShelfZone(shelf, hit.point);
+        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box.Data != null ? box.Data.category : ProductCategory.Shelf);
         if (zone == null || zone.IsFull)
             return false;
 
@@ -215,7 +215,7 @@ public class ProductInteraction : MonoBehaviour
         if (shelf == null || shelf.IsHeld())
             return false;
 
-        ShelfZone zone = FindBestShelfZone(shelf, hit.point);
+        ProductBox box = heldProduct.GetComponent<ProductBox>();\n        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box != null && box.Data != null ? box.Data.category : ProductCategory.Shelf);
         if (zone == null)
         {
             Debug.LogWarning("Shelf placement failed: no ShelfZone was found under this shelf.");
@@ -232,7 +232,7 @@ public class ProductInteraction : MonoBehaviour
         return true;
     }
 
-    private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint)
+    private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint, ProductCategory requiredCategory)
     {
         ShelfZone[] zones = shelf.GetComponentsInChildren<ShelfZone>(true);
         ShelfZone bestZone = null;
