@@ -12,6 +12,10 @@ public class ShelfZone : MonoBehaviour
     [Header("Detection")]
     [SerializeField] private string productTag = "Product";
 
+    [Header("Zone Category")]
+    [SerializeField] private ProductCategory acceptedCategory = ProductCategory.Shelf;
+    public ProductCategory AcceptedCategory => acceptedCategory;
+
     [Header("Optional Limit")]
     [Min(0)]
     [SerializeField] private int maxProducts = 0; // 0 = unlimited
@@ -35,7 +39,7 @@ public class ShelfZone : MonoBehaviour
     private void OnTriggerEnter(Collider other)
     {
         Transform product = FindProductRoot(other.transform);
-        if (product == null)
+        if (product == null || !CanAccept(product))
             return;
 
         if (products.Add(product))
@@ -81,7 +85,7 @@ public class ShelfZone : MonoBehaviour
     /// <summary>Registers a product placed by the player's stocking interaction.</summary>
     public bool RegisterProduct(Transform product)
     {
-        if (product == null || IsFull)
+        if (product == null || IsFull || !CanAccept(product))
             return false;
 
         if (products.Add(product))
@@ -96,7 +100,7 @@ public class ShelfZone : MonoBehaviour
             ProductExited?.Invoke(this, product);
     }
 
-    public void SetMaxProducts(int amount)
+    private bool CanAccept(Transform product)\n    {\n        ProductItem item = product.GetComponent<ProductItem>();\n        return item != null && item.Data != null && item.Category == acceptedCategory;\n    }\n\n    public void SetMaxProducts(int amount)
     {
         maxProducts = Mathf.Max(0, amount);
     }
