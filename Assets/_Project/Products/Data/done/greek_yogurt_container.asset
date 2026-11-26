@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b3e4f2d9c8a5b6e0d1f2a3c4b5e6d72, type: 3}
-  m_Name: strawberry_milk_bottle_250ml Variant
+  m_Name: greek_yogurt_container
   m_EditorClassIdentifier: Assembly-CSharp::ProductData
-  productId: strawberry_milk_bottle_250ml_variant
-  productName: strawberry_milk_bottle_250ml Variant
+  productId: greek_yogurt_container
+  productName: greek_yogurt_container
   category: 1
-  productPrefab: {fileID: 3275380893726088958, guid: 288ba8df48231b64ebf6c5799c7f2485, type: 3}
+  productPrefab: {fileID: 1738374120302396284, guid: 2bd087b15e581c1478ad7ed2d7f85e43, type: 3}
   buyPrice: 1
   marketPrice: 5
-  packSize: 12
-  columns: 3
-  rows: 4
+  packSize: 15
+  columns: 5
+  rows: 3
   layers: 1
   productHeight: 0.15
   rotation: {x: 0, y: 90, z: 0}

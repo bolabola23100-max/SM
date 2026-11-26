@@ -19,8 +19,8 @@ MonoBehaviour:
   buyPrice: 1
   marketPrice: 5
   packSize: 12
-  columns: 3
-  rows: 4
+  columns: 4
+  rows: 3
   layers: 1
   productHeight: 0.15
   rotation: {x: 0, y: 90, z: 0}

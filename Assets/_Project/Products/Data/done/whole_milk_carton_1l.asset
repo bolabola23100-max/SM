@@ -18,10 +18,10 @@ MonoBehaviour:
   productPrefab: {fileID: 6051206023856327671, guid: 71720218497696b4f90b8ba15f935b01, type: 3}
   buyPrice: 1
   marketPrice: 5
-  packSize: 12
-  columns: 3
-  rows: 4
+  packSize: 18
+  columns: 6
+  rows: 3
   layers: 1
   productHeight: 0.15
-  rotation: {x: 0, y: 90, z: 0}
+  rotation: {x: 0, y: 0, z: 0}
   offset: {x: 0, y: 0, z: 0}

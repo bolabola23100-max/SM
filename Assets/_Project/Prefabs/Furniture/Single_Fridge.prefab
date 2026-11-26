@@ -67,6 +67,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShelfZone
   productTag: Product
+  acceptedCategory: 1
   maxProducts: 0
 --- !u!1 &4050068039181697158
 GameObject:
@@ -135,6 +136,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShelfZone
   productTag: Product
+  acceptedCategory: 1
   maxProducts: 0
 --- !u!1 &4601789309570915029
 GameObject:
@@ -203,6 +205,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShelfZone
   productTag: Product
+  acceptedCategory: 1
   maxProducts: 0
 --- !u!1 &9040365835246892720
 GameObject:
@@ -271,6 +274,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShelfZone
   productTag: Product
+  acceptedCategory: 1
   maxProducts: 0
 --- !u!1001 &3056574643636242743
 PrefabInstance:
