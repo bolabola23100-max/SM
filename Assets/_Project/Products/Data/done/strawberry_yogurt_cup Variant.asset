@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: strawberry_yogurt_cup Variant
   category: 1
   productPrefab: {fileID: 4894748865989864186, guid: 5f933279db546544f8a4c29c7bb4c5a2, type: 3}
+  productIcon: {fileID: -2829295219606639962, guid: e7d9ea28f97fd12458da51f53ab807a7, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 36

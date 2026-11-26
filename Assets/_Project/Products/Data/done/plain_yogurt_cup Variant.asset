@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: plain_yogurt_cup Variant
   category: 1
   productPrefab: {fileID: 1240383201031247416, guid: 03a33320d98b54a42beed025fa15644b, type: 3}
+  productIcon: {fileID: -6105211369829363919, guid: 2f52eb71ec9240a4c8fcdf437fca7115, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 36

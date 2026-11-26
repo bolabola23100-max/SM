@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: family_yogurt_container_1kg
   category: 1
   productPrefab: {fileID: 4728050887228232665, guid: ea7945815bcfb66468e5ab38ab9482f4, type: 3}
+  productIcon: {fileID: -8192011884323717794, guid: 22c4f889b470dd14ea47b40204584a10, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 12

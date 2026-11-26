@@ -16,9 +16,10 @@ MonoBehaviour:
   productName: feta_cheese_container
   category: 1
   productPrefab: {fileID: 984364589535523105, guid: 9ee55851ff215a343aa7deee65bf6850, type: 3}
+  productIcon: {fileID: -2610017199781457584, guid: 0f41a7edc473fca42a70e934bf0cfaf7, type: 3}
   buyPrice: 1
   marketPrice: 5
-  packSize: 12
+  packSize: 24
   columns: 4
   rows: 3
   layers: 2

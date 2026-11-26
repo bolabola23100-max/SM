@@ -16,12 +16,13 @@ MonoBehaviour:
   productName: gouda_cheese_block
   category: 1
   productPrefab: {fileID: 9056899592272850394, guid: 2778b99e8e93cb44da415a2892d7573b, type: 3}
+  productIcon: {fileID: -5103268876229230871, guid: b3acf34470522d8478f923037c4ae548, type: 3}
   buyPrice: 1
   marketPrice: 5
-  packSize: 12
-  columns: 3
-  rows: 4
+  packSize: 15
+  columns: 5
+  rows: 3
   layers: 1
   productHeight: 0.15
-  rotation: {x: 0, y: 90, z: 0}
+  rotation: {x: 0, y: 0, z: 0}
   offset: {x: 0, y: 0, z: 0}

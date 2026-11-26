@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: chocolate_milk_bottle_250ml
   category: 1
   productPrefab: {fileID: 7040858137597930926, guid: 309f3d92e842a8f4d9f574b40b48fbfe, type: 3}
+  productIcon: {fileID: 1168164111180189913, guid: 7866d4b262f7f9b42b59a88ace3eb7e3, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 18

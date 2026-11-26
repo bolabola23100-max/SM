@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: parmesan_cheese_container
   category: 1
   productPrefab: {fileID: 1847177173839599843, guid: 429b7b87d7ad74849b7e358b1428260d, type: 3}
+  productIcon: {fileID: 8370662878132162415, guid: 4d95cffdbd35d19408360611d4753b85, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 36

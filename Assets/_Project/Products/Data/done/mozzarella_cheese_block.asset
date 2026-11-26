@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: mozzarella_cheese_block
   category: 1
   productPrefab: {fileID: 6222296319767693474, guid: 91dc973f5f260b041adc45f99746606a, type: 3}
+  productIcon: {fileID: -4637098946570624305, guid: f03da12cc1a12244d956d68aec813477, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 36

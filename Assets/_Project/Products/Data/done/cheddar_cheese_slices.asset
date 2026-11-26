@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: cheddar_cheese_slices
   category: 1
   productPrefab: {fileID: 5250593667892023035, guid: 0228aa5e6558f154c8e93da41d679dce, type: 3}
+  productIcon: {fileID: 7445060305558543398, guid: 5dd2158b032b8d746b3aa6b3232e5d63, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 45

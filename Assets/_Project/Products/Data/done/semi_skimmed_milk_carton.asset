@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: semi_skimmed_milk_carton
   category: 1
   productPrefab: {fileID: 2008268058090914335, guid: ec60c6c4f9c217044be5f5fc52ff25b7, type: 3}
+  productIcon: {fileID: -5752069057214131531, guid: f44fa49f31b47a1488a745ee3c38956b, type: 3}
   buyPrice: 2
   marketPrice: 3.3
   packSize: 18

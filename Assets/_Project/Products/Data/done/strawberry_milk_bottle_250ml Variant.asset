@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: strawberry_milk_bottle_250ml Variant
   category: 1
   productPrefab: {fileID: 3275380893726088958, guid: 288ba8df48231b64ebf6c5799c7f2485, type: 3}
+  productIcon: {fileID: -3117969411282236011, guid: fb9b49b1049f45c438f0c0a3c1de0420, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 18

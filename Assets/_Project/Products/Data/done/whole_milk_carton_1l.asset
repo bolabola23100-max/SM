@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: whole_milk_carton_1l
   category: 1
   productPrefab: {fileID: 6051206023856327671, guid: 71720218497696b4f90b8ba15f935b01, type: 3}
+  productIcon: {fileID: -4502000482048486548, guid: b9f77fbad403e484ab6dadd4eac40e35, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 18

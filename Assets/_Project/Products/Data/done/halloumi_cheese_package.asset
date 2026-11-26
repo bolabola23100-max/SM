@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: halloumi_cheese_package
   category: 1
   productPrefab: {fileID: 2061939435536730974, guid: bd2c61f625700c441bb51d2762ba562d, type: 3}
+  productIcon: {fileID: 8561506340696568701, guid: 6bfa0f0e38adde14c9d75f14a1619296, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 36

@@ -457,7 +457,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8040b7dd6c83a8548b2604762a84c23d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlacementChecker
-  shelf: {fileID: 0}
+  shelf: {fileID: 5127801066061473559}
   blockingLayers:
     serializedVersion: 2
     m_Bits: 4294967295

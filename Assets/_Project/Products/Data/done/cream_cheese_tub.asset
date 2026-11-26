@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: cream_cheese_tub
   category: 1
   productPrefab: {fileID: 7096549169197008121, guid: fa1440e452119e048b12d4ceb461b209, type: 3}
+  productIcon: {fileID: -6497648702280198185, guid: 253585dd45624f546a5b772a052fb696, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 45

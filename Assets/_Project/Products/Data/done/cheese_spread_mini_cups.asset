@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: cheese_spread_mini_cups
   category: 1
   productPrefab: {fileID: 1357112278991799920, guid: 529113948f514a44fb11ea24efb234ab, type: 3}
+  productIcon: {fileID: -8054886872984401051, guid: 49f70b1370786494e9a5cab48f05b438, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 45

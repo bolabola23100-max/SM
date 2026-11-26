@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: mango_yogurt_cup
   category: 1
   productPrefab: {fileID: 6467143299774116269, guid: 209cf908b4a1c4a4794ce2550600bd17, type: 3}
+  productIcon: {fileID: -1719162914341244863, guid: 633cadeb07db12246bdd6a8968eacd72, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 36

@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: blueberry_yogurt_cup
   category: 1
   productPrefab: {fileID: 7343503840959357168, guid: bf35ba67129199f49bd97b4a1aab7ec0, type: 3}
+  productIcon: {fileID: -2112468126975658931, guid: ee141dd12511cb14e8971fb63d035e22, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 81

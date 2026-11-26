@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: drinking_yogurt_bottle
   category: 1
   productPrefab: {fileID: 3150945549874580536, guid: 5493f93a2e19cc942b2253dc01f7d67f, type: 3}
+  productIcon: {fileID: 3185680528685163733, guid: 42f0c35f7f5780644acbda42e287f75c, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 18

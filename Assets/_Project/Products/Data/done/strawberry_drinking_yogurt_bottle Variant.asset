@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: strawberry_drinking_yogurt_bottle Variant
   category: 1
   productPrefab: {fileID: 157749792758664302, guid: e73c1ff52a4bff14a9c23248270db235, type: 3}
+  productIcon: {fileID: -4083992222861413857, guid: f2d5239415ecb8e4f8a4f7d5d1bd7441, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 18

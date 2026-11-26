@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: greek_yogurt_container
   category: 1
   productPrefab: {fileID: 1738374120302396284, guid: 2bd087b15e581c1478ad7ed2d7f85e43, type: 3}
+  productIcon: {fileID: 9142732253238849383, guid: 579507745529c624798a3932fbb9555d, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 15

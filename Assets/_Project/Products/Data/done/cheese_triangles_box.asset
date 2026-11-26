@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: cheese_triangles_box
   category: 1
   productPrefab: {fileID: 8074141471965562418, guid: 110076ebeab234c47a3f79312608868b, type: 3}
+  productIcon: {fileID: 8404334621367435670, guid: 095bfd51b8a77f347afff3f295ff3a7f, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 45

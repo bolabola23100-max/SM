@@ -16,6 +16,7 @@ MonoBehaviour:
   productName: skimmed_milk_carton_1l
   category: 1
   productPrefab: {fileID: 6382788607503645124, guid: 7a7deaf4faf781e44b1142994240f244, type: 3}
+  productIcon: {fileID: 7921020815711766931, guid: d37106e7c8b1af142b058bdf7200984c, type: 3}
   buyPrice: 1
   marketPrice: 5
   packSize: 18
