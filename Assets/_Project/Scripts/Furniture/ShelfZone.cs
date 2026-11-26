@@ -100,7 +100,13 @@ public class ShelfZone : MonoBehaviour
             ProductExited?.Invoke(this, product);
     }
 
-    private bool CanAccept(Transform product)\n    {\n        ProductItem item = product.GetComponent<ProductItem>();\n        return item != null && item.Data != null && item.Category == acceptedCategory;\n    }\n\n    public void SetMaxProducts(int amount)
+    private bool CanAccept(Transform product)
+    {
+        ProductItem item = product.GetComponent<ProductItem>();
+        return item != null && item.Data != null && item.Category == acceptedCategory;
+    }
+
+    public void SetMaxProducts(int amount)
     {
         maxProducts = Mathf.Max(0, amount);
     }
