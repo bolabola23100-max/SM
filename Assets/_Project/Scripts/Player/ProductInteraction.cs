@@ -100,12 +100,12 @@ public class ProductInteraction : MonoBehaviour
         if (shelf == null || shelf.IsHeld())
             return false;
 
-        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box.Data != null ? box.Data.category : ProductCategory.Shelf);
-        if (zone == null || zone.IsFull)
-            return false;
-
         ProductData data = box.Data;
         if (data == null || data.productPrefab == null)
+            return false;
+
+        ShelfZone zone = FindBestShelfZone(shelf, hit.point, data);
+        if (zone == null || zone.IsFull || !zone.CanAcceptData(data))
             return false;
 
         // The shelf limit is defined by this product's columns x rows x layers.
@@ -216,7 +216,7 @@ public class ProductInteraction : MonoBehaviour
             return false;
 
         ProductBox box = heldProduct.GetComponent<ProductBox>();
-        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box != null && box.Data != null ? box.Data.category : ProductCategory.Shelf);
+        ShelfZone zone = FindBestShelfZone(shelf, hit.point, box != null ? box.Data : null);
         if (zone == null)
         {
             Debug.LogWarning("Shelf placement failed: no ShelfZone was found under this shelf.");
@@ -233,7 +233,7 @@ public class ProductInteraction : MonoBehaviour
         return true;
     }
 
-    private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint, ProductCategory requiredCategory)
+    private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint, ProductData requiredData)
     {
         ShelfZone[] zones = shelf.GetComponentsInChildren<ShelfZone>(true);
         ShelfZone bestZone = null;
@@ -241,11 +241,11 @@ public class ProductInteraction : MonoBehaviour
 
         foreach (ShelfZone candidate in zones)
         {
-            if (candidate == null || candidate.AcceptedCategory != requiredCategory)
+            if (candidate == null || requiredData == null || !candidate.CanAcceptData(requiredData))
                 continue;
 
             BoxCollider zoneCollider = candidate.GetComponent<BoxCollider>();
-            if (zoneCollider == null || !zoneCollider.enabled || candidate.AcceptedCategory != requiredCategory)
+            if (zoneCollider == null || !zoneCollider.enabled)
                 continue;
 
             Bounds bounds = zoneCollider.bounds;
