@@ -241,7 +241,7 @@ public class ProductInteraction : MonoBehaviour
 
         foreach (ShelfZone candidate in zones)
         {
-            if (candidate == null)
+            if (candidate == null || candidate.AcceptedCategory != requiredCategory)
                 continue;
 
             BoxCollider zoneCollider = candidate.GetComponent<BoxCollider>();
