@@ -235,32 +235,33 @@ public class ProductInteraction : MonoBehaviour
 
     private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint, ProductData requiredData)
     {
-        ShelfZone[] zones = shelf.GetComponentsInChildren<ShelfZone>(true);
-        ShelfZone bestZone = null;
-        float bestDistance = float.PositiveInfinity;
+        if (playerCamera == null || requiredData == null)
+            return null;
 
-        foreach (ShelfZone candidate in zones)
+        // Only allow placement into the zone the camera ray actually intersects.
+        // This prevents selecting a different shelf level simply because it is nearer.
+        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+        RaycastHit[] hits = Physics.RaycastAll(ray, interactionDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (RaycastHit rayHit in hits)
         {
-            if (candidate == null || requiredData == null || !candidate.CanAcceptData(requiredData))
+            ShelfZone zone = rayHit.collider.GetComponent<ShelfZone>();
+            if (zone == null)
+                zone = rayHit.collider.GetComponentInParent<ShelfZone>();
+
+            if (zone == null || zone.transform.GetComponentInParent<ShelfPlacement>() != shelf)
                 continue;
 
-            BoxCollider zoneCollider = candidate.GetComponent<BoxCollider>();
-            if (zoneCollider == null || !zoneCollider.enabled)
-                continue;
+            if (zone.CanAcceptData(requiredData))
+                return zone;
 
-            Bounds bounds = zoneCollider.bounds;
-            Vector3 closest = bounds.ClosestPoint(aimPoint);
-            float distance = (closest - aimPoint).sqrMagnitude;
-
-            // Prefer the zone whose volume is closest to the point the player is aiming at.
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestZone = candidate;
-            }
+            // If the ray hits a zone belonging to another product, do not skip
+            // to a different level behind it.
+            return null;
         }
 
-        return bestZone;
+        return null;
     }
 
     private void TryPickupBox()
