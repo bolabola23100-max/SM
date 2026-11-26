@@ -371,34 +371,60 @@ public class ComputerShopUI : MonoBehaviour
     private void CreateStoreProductRow(RectTransform parent, ProductData data)
     {
         Image row = CreatePanel(parent, "StoreProduct_" + data.productId,
-            new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, Color.white);
-
-        // The row is only a background. It must never compete with its child
-        // buttons for pointer/touch raycasts inside the ScrollRect viewport.
+            new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, new Color(0.04f, 0.22f, 0.34f, 1f));
         row.raycastTarget = false;
 
         LayoutElement element = row.gameObject.AddComponent<LayoutElement>();
-        element.minHeight = 96f;
-        element.preferredHeight = 96f;
+        element.minHeight = 150f;
+        element.preferredHeight = 150f;
 
         RectTransform r = row.rectTransform;
-        CreateText(r, data.productName + "  |  " + data.category, 28, FontStyle.Bold,
-            new Vector2(0.025f, 0.55f), new Vector2(0.52f, 0.94f), TextAnchor.MiddleLeft, ink);
-        CreateText(r, "CARTON PRICE: " + data.PackCost.ToString("0.##") + "  •  " + data.packSize + " units",
-            22, FontStyle.Normal, new Vector2(0.025f, 0.08f), new Vector2(0.52f, 0.50f),
-            TextAnchor.MiddleLeft, muted);
 
-        CreateButton(r, "−", new Vector2(0.56f, 0.20f), new Vector2(0.62f, 0.80f),
-            new Color(0.86f, 0.89f, 0.92f), ink, () => ChangeSelectedQuantity(data, -1));
-        Text quantity = CreateText(r, selectedQuantities[data].ToString(), 28, FontStyle.Bold,
-            new Vector2(0.625f, 0.20f), new Vector2(0.69f, 0.80f),
-            TextAnchor.MiddleCenter, ink);
+        // Product image: manually assigned on the ProductData asset.
+        GameObject iconObject = new GameObject("ProductIcon", typeof(RectTransform), typeof(Image));
+        RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+        iconRect.SetParent(r, false);
+        iconRect.anchorMin = new Vector2(0.025f, 0.10f);
+        iconRect.anchorMax = new Vector2(0.25f, 0.90f);
+        iconRect.offsetMin = Vector2.zero;
+        iconRect.offsetMax = Vector2.zero;
+        Image icon = iconObject.GetComponent<Image>();
+        icon.sprite = data.productIcon;
+        icon.preserveAspect = true;
+        icon.color = data.productIcon != null ? Color.white : new Color(0.18f, 0.28f, 0.34f, 1f);
+        icon.raycastTarget = false;
+
+        if (data.productIcon == null)
+        {
+            Text placeholder = CreateText(iconRect, "NO IMAGE", 18, FontStyle.Bold,
+                Vector2.zero, Vector2.one, TextAnchor.MiddleCenter, new Color(0.75f, 0.82f, 0.86f));
+            placeholder.raycastTarget = false;
+        }
+
+        CreateText(r, data.productName, 26, FontStyle.Bold,
+            new Vector2(0.28f, 0.65f), new Vector2(0.56f, 0.92f),
+            TextAnchor.MiddleLeft, Color.white);
+        CreateText(r, data.category.ToString().ToUpperInvariant(), 17, FontStyle.Normal,
+            new Vector2(0.28f, 0.48f), new Vector2(0.56f, 0.65f),
+            TextAnchor.MiddleLeft, new Color(0.70f, 0.84f, 0.90f));
+        CreateText(r, "PACK: " + data.packSize + " UNITS",
+            18, FontStyle.Normal, new Vector2(0.28f, 0.22f), new Vector2(0.56f, 0.46f),
+            TextAnchor.MiddleLeft, Color.white);
+        CreateText(r, "CARTON PRICE  " + data.PackCost.ToString("0.##"),
+            20, FontStyle.Bold, new Vector2(0.28f, 0.06f), new Vector2(0.56f, 0.22f),
+            TextAnchor.MiddleLeft, new Color(0.38f, 1f, 0.65f));
+
+        CreateButton(r, "−", new Vector2(0.59f, 0.58f), new Vector2(0.65f, 0.90f),
+            new Color(0.14f, 0.30f, 0.40f), Color.white, () => ChangeSelectedQuantity(data, -1));
+        Text quantity = CreateText(r, selectedQuantities[data].ToString(), 27, FontStyle.Bold,
+            new Vector2(0.65f, 0.58f), new Vector2(0.71f, 0.90f),
+            TextAnchor.MiddleCenter, Color.white);
         selectedQuantityLabels[data] = quantity;
-        CreateButton(r, "+", new Vector2(0.695f, 0.20f), new Vector2(0.755f, 0.80f),
-            new Color(0.86f, 0.89f, 0.92f), ink, () => ChangeSelectedQuantity(data, 1));
+        CreateButton(r, "+", new Vector2(0.71f, 0.58f), new Vector2(0.77f, 0.90f),
+            new Color(0.14f, 0.30f, 0.40f), Color.white, () => ChangeSelectedQuantity(data, 1));
 
-        CreateButton(r, "ADD TO CART", new Vector2(0.78f, 0.16f), new Vector2(0.975f, 0.84f),
-            green, Color.white, () => AddToCart(data));
+        CreateButton(r, "ADD TO CART", new Vector2(0.59f, 0.10f), new Vector2(0.975f, 0.48f),
+            new Color(0.03f, 0.68f, 0.26f), Color.white, () => AddToCart(data));
     }
 
     private void ChangeSelectedQuantity(ProductData data, int delta)
