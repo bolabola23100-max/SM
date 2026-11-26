@@ -68,10 +68,14 @@ public class MoneyManager : MonoBehaviour
     }
     private void Load()
     {
-        if(!PlayerPrefs.HasKey(SaveKey)){Balance=startingBalance;Save();return;}
+        // Testing mode: always start with the configured balance (1000 by default).
+        Balance=startingBalance;
+        if(!PlayerPrefs.HasKey(SaveKey)){Save();return;}
         SaveState s=JsonUtility.FromJson<SaveState>(PlayerPrefs.GetString(SaveKey));
-        if(s==null){Balance=startingBalance;return;}
-        Balance=s.balance;TotalRevenue=s.totalRevenue;TotalExpenses=s.totalExpenses;DiscountsGiven=s.discountsGiven;transactions=s.transactions??new List<Transaction>();
+        if(s==null){Save();return;}
+        // Keep history and stats, but never restore the previous balance.
+        TotalRevenue=s.totalRevenue;TotalExpenses=s.totalExpenses;DiscountsGiven=s.discountsGiven;transactions=s.transactions??new List<Transaction>();
+        Save();
     }
     public void ResetEconomy(){Balance=startingBalance;TotalRevenue=0;TotalExpenses=0;DiscountsGiven=0;transactions.Clear();Save();Changed?.Invoke();}
 }
