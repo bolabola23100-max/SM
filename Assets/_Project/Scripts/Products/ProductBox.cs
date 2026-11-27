@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -22,6 +23,8 @@ public class ProductBox : MonoBehaviour
     [Min(0.005f)][SerializeField] private float productHeight = 0.22f;
     [Min(0.005f)][SerializeField] private float wallThickness = 0.018f;
     [Min(0f)][SerializeField] private float padding = 0.035f;
+    [Min(0.05f)][SerializeField] private float maxCartonWidth = 0.70f;
+    [Min(0.01f)][SerializeField] private float flapOpenDuration = 0.22f;
 
     [Header("Appearance")]
     [SerializeField] private Color cartonColor = new Color(0.62f, 0.40f, 0.22f);
@@ -42,6 +45,7 @@ public class ProductBox : MonoBehaviour
     private float fittedProductDepth;
     private Vector3 fittedProductCenterOffset;
     private bool displaysBuilt;
+    private Coroutine flapAnimation;
 
     private struct ProductDimensions
     {
@@ -49,6 +53,8 @@ public class ProductBox : MonoBehaviour
         public Vector3 centerOffset;
     }
     private static readonly Dictionary<EntityId, ProductDimensions> dimensionsCache = new Dictionary<EntityId, ProductDimensions>();
+    private struct CartonLayout { public int columns, rows, layers; public float innerX, innerZ, innerY; public Vector3 size; }
+    private static readonly Dictionary<string, CartonLayout> layoutCache = new Dictionary<string, CartonLayout>();
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
@@ -86,46 +92,19 @@ public class ProductBox : MonoBehaviour
         remainingCount = useProductPackSize ? Mathf.Max(1, productData.packSize) : Mathf.Max(1, customCount);
         MeasureProductDimensions();
 
-        // Automatically select a compact layout using the real product dimensions.
-        // Prefer a modest rectangle (length can exceed width) and stack only when useful.
         productSpacing = Mathf.Clamp(productSpacing, 0.004f, 0.012f);
         padding = Mathf.Clamp(padding, 0.012f, 0.025f);
-        int bestCols = 1, bestRows = 1, bestLayers = remainingCount;
-        float bestScore = float.MaxValue;
-        for (int candidateLayers = 1; candidateLayers <= remainingCount; candidateLayers++)
+        string key = productData.productPrefab.GetEntityId().ToString() + ":" + remainingCount;
+        CartonLayout layout;
+        if (!layoutCache.TryGetValue(key, out layout))
         {
-            int unitsPerLayer = Mathf.CeilToInt((float)remainingCount / candidateLayers);
-            for (int candidateRows = 1; candidateRows <= unitsPerLayer; candidateRows++)
-            {
-                int candidateCols = Mathf.CeilToInt((float)unitsPerLayer / candidateRows);
-                float x = candidateCols * fittedProductWidth + (candidateCols - 1) * productSpacing;
-                float z = candidateRows * fittedProductDepth + (candidateRows - 1) * productSpacing;
-                float aspect = Mathf.Max(x, z) / Mathf.Max(0.001f, Mathf.Min(x, z));
-                float area = x * z;
-                float height = candidateLayers * productHeight;
-                // Penalize overly elongated footprint and excessive stacking, without caps.
-                float score = area * (1f + Mathf.Max(0f, aspect - 1.65f) * 1.4f) + height * 0.12f;
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    bestCols = candidateCols;
-                    bestRows = candidateRows;
-                    bestLayers = candidateLayers;
-                }
-            }
+            layout = FindBestLayout(remainingCount);
+            layoutCache[key] = layout;
         }
-        columns = bestCols;
-        rows = bestRows;
-        int perLayer = columns * rows;
-        int layers = bestLayers;
-
-        float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
-        float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
-        float innerY = layers * productHeight;
-
-        cartonSize = new Vector3(innerX + 2f * (padding + wallThickness),
-            innerY + 2f * padding + wallThickness,
-            innerZ + 2f * (padding + wallThickness));
+        columns = layout.columns; rows = layout.rows;
+        int perLayer = columns * rows, layers = layout.layers;
+        float innerX = layout.innerX, innerZ = layout.innerZ, innerY = layout.innerY;
+        cartonSize = layout.size;
 
         visualRoot = new GameObject("CartonVisuals").transform;
         visualRoot.SetParent(transform, false);
@@ -162,6 +141,70 @@ public class ProductBox : MonoBehaviour
             BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
             displaysBuilt = true;
         }
+    }
+
+    private CartonLayout FindBestLayout(int count)
+    {
+        CartonLayout best = new CartonLayout();
+        float bestScore = float.MaxValue;
+        for (int layerCount = 1; layerCount <= count; layerCount++)
+        {
+            int unitsPerLayer = Mathf.CeilToInt((float)count / layerCount);
+            for (int rowCount = 1; rowCount <= unitsPerLayer; rowCount++)
+            {
+                int colCount = Mathf.CeilToInt((float)unitsPerLayer / rowCount);
+                float ix = colCount * fittedProductWidth + (colCount - 1) * productSpacing;
+                float iz = rowCount * fittedProductDepth + (rowCount - 1) * productSpacing;
+                float x = ix + 2f * (padding + wallThickness), z = iz + 2f * (padding + wallThickness);
+                if (x > maxCartonWidth) continue;
+                float y = layerCount * productHeight + 2f * padding + wallThickness;
+                float volume = x * z * y;
+                float ratio = Mathf.Max(x, z, y) / Mathf.Max(0.001f, Mathf.Min(x, z, y));
+                float score = volume * (1f + Mathf.Max(0f, ratio - 1.4f) * 0.45f);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best.columns = colCount; best.rows = rowCount; best.layers = layerCount;
+                    best.innerX = ix; best.innerZ = iz; best.innerY = layerCount * productHeight;
+                    best.size = new Vector3(x, y, z);
+                }
+            }
+        }
+        if (bestScore == float.MaxValue)
+        {
+            best.columns = 1; best.rows = 1; best.layers = count;
+            best.innerX = fittedProductWidth; best.innerZ = fittedProductDepth;
+            best.innerY = count * productHeight;
+            best.size = new Vector3(fittedProductWidth + 2f * (padding + wallThickness),
+                best.innerY + 2f * padding + wallThickness, fittedProductDepth + 2f * (padding + wallThickness));
+        }
+        return best;
+    }
+
+    private void AnimateFlaps(bool open)
+    {
+        if (flapAnimation != null) StopCoroutine(flapAnimation);
+        flapAnimation = StartCoroutine(FlapTween(open));
+    }
+
+    private IEnumerator FlapTween(bool open)
+    {
+        Quaternion ls = leftFlap != null ? leftFlap.localRotation : Quaternion.identity;
+        Quaternion rs = rightFlap != null ? rightFlap.localRotation : Quaternion.identity;
+        Quaternion le = open ? Quaternion.Euler(0f, 0f, 125f) : Quaternion.identity;
+        Quaternion re = open ? Quaternion.Euler(0f, 0f, -125f) : Quaternion.identity;
+        float elapsed = 0f, duration = Mathf.Max(0.01f, flapOpenDuration);
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            if (leftFlap != null) leftFlap.localRotation = Quaternion.Slerp(ls, le, t);
+            if (rightFlap != null) rightFlap.localRotation = Quaternion.Slerp(rs, re, t);
+            yield return null;
+        }
+        if (leftFlap != null) leftFlap.localRotation = le;
+        if (rightFlap != null) rightFlap.localRotation = re;
+        flapAnimation = null;
     }
 
     private void MeasureProductDimensions()
@@ -285,8 +328,7 @@ public class ProductBox : MonoBehaviour
             displaysBuilt = true;
         }
         foreach (GameObject display in productDisplays) if (display != null) display.SetActive(true);
-        if (leftFlap != null) leftFlap.localRotation = Quaternion.Euler(0f, 0f, 125f);
-        if (rightFlap != null) rightFlap.localRotation = Quaternion.Euler(0f, 0f, -125f);
+        AnimateFlaps(true);
         return true;
     }
 
@@ -295,8 +337,7 @@ public class ProductBox : MonoBehaviour
         if (!isOpen) return false;
         isOpen = false;
         foreach (GameObject display in productDisplays) if (display != null) display.SetActive(showProductModelsBeforeOpening);
-        if (leftFlap != null) leftFlap.localRotation = Quaternion.identity;
-        if (rightFlap != null) rightFlap.localRotation = Quaternion.identity;
+        AnimateFlaps(false);
         return true;
     }
 
