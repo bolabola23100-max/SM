@@ -53,7 +53,7 @@ public class ProductBox : MonoBehaviour
         public float height;
         public Vector3 centerOffset;
     }
-    private static readonly Dictionary<int, ProductDimensions> dimensionsCache = new Dictionary<int, ProductDimensions>();
+    private static readonly Dictionary<EntityId, ProductDimensions> dimensionsCache = new Dictionary<EntityId, ProductDimensions>();
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
@@ -186,7 +186,7 @@ public class ProductBox : MonoBehaviour
     private void MeasureProductDimensions()
     {
         GameObject prefab = productData.productPrefab;
-        int cacheKey = prefab.GetEntityId();
+        EntityId cacheKey = prefab.GetEntityId();
         if (dimensionsCache.TryGetValue(cacheKey, out ProductDimensions cached))
         {
             fittedProductWidth = cached.width;
