@@ -22,10 +22,6 @@ public class ProductBox : MonoBehaviour
     [Min(0.005f)][SerializeField] private float productHeight = 0.22f;
     [Min(0.005f)][SerializeField] private float wallThickness = 0.018f;
     [Min(0f)][SerializeField] private float padding = 0.035f;
-    [Header("Carton size limits (meters)")]
-    [Min(0.05f)][SerializeField] private float maxCartonWidth = 0.65f;
-    [Min(0.05f)][SerializeField] private float maxCartonDepth = 0.50f;
-    [Min(0.05f)][SerializeField] private float maxCartonHeight = 0.55f;
 
     [Header("Appearance")]
     [SerializeField] private Color cartonColor = new Color(0.62f, 0.40f, 0.22f);
@@ -90,36 +86,46 @@ public class ProductBox : MonoBehaviour
         remainingCount = useProductPackSize ? Mathf.Max(1, productData.packSize) : Mathf.Max(1, customCount);
         MeasureProductDimensions();
 
-        // Fixed carton arrangement: 5 units along the length and 4 across the width.
-        // The carton footprint stays consistent; extra units are stacked in layers.
-        columns = 5;
-        rows = 4;
+        // Automatically select a compact layout using the real product dimensions.
+        // Prefer a modest rectangle (length can exceed width) and stack only when useful.
         productSpacing = Mathf.Clamp(productSpacing, 0.004f, 0.012f);
         padding = Mathf.Clamp(padding, 0.012f, 0.025f);
-        // Fit the carton to fixed size limits, uniformly scaling the displayed units if needed.
-        float fitScale = Mathf.Min(1f,
-            (maxCartonWidth - 2f * (padding + wallThickness) - (columns - 1) * productSpacing) / (columns * fittedProductWidth),
-            (maxCartonDepth - 2f * (padding + wallThickness) - (rows - 1) * productSpacing) / (rows * fittedProductDepth));
-        fitScale = Mathf.Clamp(fitScale, 0.01f, 1f);
-        fittedProductWidth *= fitScale;
-        fittedProductDepth *= fitScale;
-        productHeight *= fitScale;
-        fittedProductCenterOffset *= fitScale;
-
+        int bestCols = 1, bestRows = 1, bestLayers = remainingCount;
+        float bestScore = float.MaxValue;
+        for (int candidateLayers = 1; candidateLayers <= remainingCount; candidateLayers++)
+        {
+            int unitsPerLayer = Mathf.CeilToInt((float)remainingCount / candidateLayers);
+            for (int candidateRows = 1; candidateRows <= unitsPerLayer; candidateRows++)
+            {
+                int candidateCols = Mathf.CeilToInt((float)unitsPerLayer / candidateRows);
+                float x = candidateCols * fittedProductWidth + (candidateCols - 1) * productSpacing;
+                float z = candidateRows * fittedProductDepth + (candidateRows - 1) * productSpacing;
+                float aspect = Mathf.Max(x, z) / Mathf.Max(0.001f, Mathf.Min(x, z));
+                float area = x * z;
+                float height = candidateLayers * productHeight;
+                // Penalize overly elongated footprint and excessive stacking, without caps.
+                float score = area * (1f + Mathf.Max(0f, aspect - 1.65f) * 1.4f) + height * 0.12f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestCols = candidateCols;
+                    bestRows = candidateRows;
+                    bestLayers = candidateLayers;
+                }
+            }
+        }
+        columns = bestCols;
+        rows = bestRows;
         int perLayer = columns * rows;
-        float maxInnerHeight = maxCartonHeight - 2f * padding - wallThickness;
-        int maxLayers = Mathf.Max(1, Mathf.FloorToInt(maxInnerHeight / productHeight));
-        int layers = Mathf.Clamp(Mathf.CeilToInt((float)remainingCount / perLayer), 1, maxLayers);
-        remainingCount = Mathf.Min(remainingCount, perLayer * layers);
+        int layers = bestLayers;
 
         float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
         float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
         float innerY = layers * productHeight;
 
-        cartonSize = new Vector3(
-            Mathf.Min(maxCartonWidth, innerX + 2f * (padding + wallThickness)),
-            Mathf.Min(maxCartonHeight, innerY + 2f * padding + wallThickness),
-            Mathf.Min(maxCartonDepth, innerZ + 2f * (padding + wallThickness)));
+        cartonSize = new Vector3(innerX + 2f * (padding + wallThickness),
+            innerY + 2f * padding + wallThickness,
+            innerZ + 2f * (padding + wallThickness));
 
         visualRoot = new GameObject("CartonVisuals").transform;
         visualRoot.SetParent(transform, false);
