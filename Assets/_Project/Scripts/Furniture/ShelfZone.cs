@@ -21,6 +21,8 @@ public class ShelfZone : MonoBehaviour
     [SerializeField] private int maxProducts = 0; // 0 = unlimited
 
     private readonly HashSet<Transform> products = new HashSet<Transform>();
+    private float cleanupTimer;
+    [SerializeField, Min(0.25f)] private float cleanupInterval = 1f;
 
     public int ProductCount => products.Count;
     public ProductData StoredProductData => GetStoredProductData();
@@ -75,6 +77,9 @@ public class ShelfZone : MonoBehaviour
     /// <summary>Removes destroyed or disabled product references from the tracked list.</summary>
     private void LateUpdate()
     {
+        cleanupTimer += Time.deltaTime;
+        if (cleanupTimer < cleanupInterval) return;
+        cleanupTimer = 0f;
         products.RemoveWhere(product => product == null);
     }
 
