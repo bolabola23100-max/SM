@@ -20,6 +20,11 @@ public class ProductInteraction : MonoBehaviour
     private bool[] originalColliderStates;
     private bool isHolding;
 
+    // Reusable component lists avoid repeated array allocations during product placement.
+    private static readonly System.Collections.Generic.List<Rigidbody> bodyBuffer = new System.Collections.Generic.List<Rigidbody>(16);
+    private static readonly System.Collections.Generic.List<Renderer> rendererBuffer = new System.Collections.Generic.List<Renderer>(32);
+    private static readonly System.Collections.Generic.List<Collider> colliderBuffer = new System.Collections.Generic.List<Collider>(16);
+
     public bool IsHoldingProduct => isHolding && heldProduct != null;
 
     private void Update()
@@ -126,14 +131,18 @@ public class ProductInteraction : MonoBehaviour
         // Freeze every Rigidbody immediately. Some product prefabs contain
         // child rigidbodies; leaving one dynamic can launch the item when it
         // overlaps the shelf or another collider during placement.
-        Rigidbody[] productBodies = product.GetComponentsInChildren<Rigidbody>(true);
-        foreach (Rigidbody body in productBodies)
+        bodyBuffer.Clear();
+        product.GetComponentsInChildren(true, bodyBuffer);
+        for (int i = 0; i < bodyBuffer.Count; i++)
         {
+            Rigidbody body = bodyBuffer[i];
+            if (body == null) continue;
             body.isKinematic = true;
             body.useGravity = false;
             body.linearVelocity = Vector3.zero;
             body.angularVelocity = Vector3.zero;
         }
+        bodyBuffer.Clear();
 
         product.transform.rotation = Quaternion.Euler(data.rotation);
         Physics.SyncTransforms();
@@ -175,13 +184,16 @@ public class ProductInteraction : MonoBehaviour
 
     private static Bounds GetWorldBounds(GameObject target)
     {
-        Renderer[] renderers = target.GetComponentsInChildren<Renderer>(true);
-        Collider[] colliders = target.GetComponentsInChildren<Collider>(true);
+        rendererBuffer.Clear();
+        colliderBuffer.Clear();
+        target.GetComponentsInChildren(true, rendererBuffer);
+        target.GetComponentsInChildren(true, colliderBuffer);
         Bounds bounds = new Bounds(target.transform.position, Vector3.zero);
         bool hasBounds = false;
 
-        foreach (Renderer item in renderers)
+        for (int i = 0; i < rendererBuffer.Count; i++)
         {
+            Renderer item = rendererBuffer[i];
             if (item == null) continue;
             if (!hasBounds) { bounds = item.bounds; hasBounds = true; }
             else bounds.Encapsulate(item.bounds);
@@ -189,14 +201,16 @@ public class ProductInteraction : MonoBehaviour
 
         if (!hasBounds)
         {
-            foreach (Collider item in colliders)
+            for (int i = 0; i < colliderBuffer.Count; i++)
             {
+                Collider item = colliderBuffer[i];
                 if (item == null || item.isTrigger) continue;
                 if (!hasBounds) { bounds = item.bounds; hasBounds = true; }
                 else bounds.Encapsulate(item.bounds);
             }
         }
-
+        rendererBuffer.Clear();
+        colliderBuffer.Clear();
         return hasBounds ? bounds : new Bounds(target.transform.position, Vector3.one * 0.1f);
     }
 
