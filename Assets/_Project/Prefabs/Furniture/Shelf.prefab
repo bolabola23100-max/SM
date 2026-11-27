@@ -393,7 +393,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   floorTag: ShelfFloor
   wallTag: ShelfWall
-  checkInterval: 0.05
+  checkInterval: 0.1
   floorSampleInset: 0.85
   floorRayStartOffset: 0.25
   floorRayExtraDistance: 3
