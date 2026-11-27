@@ -186,7 +186,7 @@ public class ProductBox : MonoBehaviour
     private void MeasureProductDimensions()
     {
         GameObject prefab = productData.productPrefab;
-        int cacheKey = prefab.GetInstanceID();
+        int cacheKey = prefab.GetEntityId();
         if (dimensionsCache.TryGetValue(cacheKey, out ProductDimensions cached))
         {
             fittedProductWidth = cached.width;
