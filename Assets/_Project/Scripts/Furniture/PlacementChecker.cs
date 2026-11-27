@@ -14,7 +14,7 @@ public class PlacementChecker : MonoBehaviour
     public string wallTag = "ShelfWall";
 
     [Header("Settings")]
-    [Min(0.05f)] public float checkInterval = 0.1f;
+    [Min(0.1f)] public float checkInterval = 0.2f;
     [Range(0.5f, 0.98f)] public float floorSampleInset = 0.85f;
     public float floorRayStartOffset = 0.25f;
     public float floorRayExtraDistance = 3f;
@@ -67,7 +67,7 @@ public class PlacementChecker : MonoBehaviour
 
     private void CheckPlacement()
     {
-        Physics.SyncTransforms();
+        // Synchronize once per throttled placement check, not every frame.
         Bounds bounds = shelfCollider.bounds;
         Vector3 center, halfExtents;
         Quaternion orientation;
