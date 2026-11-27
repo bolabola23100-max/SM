@@ -233,19 +233,27 @@ public class ProductInteraction : MonoBehaviour
         return true;
     }
 
+    // Reused hit buffer avoids RaycastAll allocations while targeting shelf zones.
+    private static readonly RaycastHit[] shelfHitBuffer = new RaycastHit[32];
+
     private ShelfZone FindBestShelfZone(ShelfPlacement shelf, Vector3 aimPoint, ProductData requiredData)
     {
         if (playerCamera == null || requiredData == null)
             return null;
 
         // Only allow placement into the zone the camera ray actually intersects.
-        // This prevents selecting a different shelf level simply because it is nearer.
+        // NonAlloc raycast avoids allocating a new array and sorting all hits every tap.
         Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-        RaycastHit[] hits = Physics.RaycastAll(ray, interactionDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
-        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        int hitCount = Physics.RaycastNonAlloc(ray, shelfHitBuffer, interactionDistance,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
 
-        foreach (RaycastHit rayHit in hits)
+        int nearestShelfHit = -1;
+        float nearestDistance = float.MaxValue;
+        ShelfZone nearestZone = null;
+
+        for (int i = 0; i < hitCount; i++)
         {
+            RaycastHit rayHit = shelfHitBuffer[i];
             ShelfZone zone = rayHit.collider.GetComponent<ShelfZone>();
             if (zone == null)
                 zone = rayHit.collider.GetComponentInParent<ShelfZone>();
@@ -253,15 +261,24 @@ public class ProductInteraction : MonoBehaviour
             if (zone == null || zone.transform.GetComponentInParent<ShelfPlacement>() != shelf)
                 continue;
 
-            if (zone.CanAcceptData(requiredData))
-                return zone;
-
-            // If the ray hits a zone belonging to another product, do not skip
-            // to a different level behind it.
-            return null;
+            if (rayHit.distance < nearestDistance)
+            {
+                nearestDistance = rayHit.distance;
+                nearestShelfHit = i;
+                nearestZone = zone;
+            }
         }
 
-        return null;
+        // Clear reused buffer entries so stale hit references cannot be accidentally inspected.
+        for (int i = 0; i < hitCount; i++)
+            shelfHitBuffer[i] = default;
+
+        if (nearestShelfHit < 0 || nearestZone == null)
+            return null;
+
+        // Preserve the original behavior: a mismatched zone blocks placement into
+        // a different zone behind it on the same shelf.
+        return nearestZone.CanAcceptData(requiredData) ? nearestZone : null;
     }
 
     private void TryPickupBox()
