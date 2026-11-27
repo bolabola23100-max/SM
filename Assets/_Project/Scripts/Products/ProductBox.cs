@@ -265,11 +265,31 @@ public class ProductBox : MonoBehaviour
                 -innerX * 0.5f + fittedProductWidth * 0.5f + col * (fittedProductWidth + productSpacing),
                 -cartonSize.y * 0.5f + wallThickness + padding + productHeight * (layer + 0.5f),
                 -innerZ * 0.5f + fittedProductDepth * 0.5f + row * (fittedProductDepth + productSpacing));
-            Quaternion productRotation = Quaternion.Euler(productData.rotation);
-            Vector3 pivotToVisualCenter = productRotation * Vector3.Scale(productData.productPrefab.transform.localScale, fittedProductCenterOffset);
-            display.transform.localPosition = visualCenter - pivotToVisualCenter;
-            display.transform.localRotation = productRotation;
+
+            display.transform.localPosition = Vector3.zero;
+            display.transform.localRotation = Quaternion.Euler(productData.rotation);
             display.transform.localScale = productData.productPrefab.transform.localScale;
+
+            // Align using the actual instantiated renderers' bounds, not the prefab pivot.
+            Renderer[] renderers = display.GetComponentsInChildren<Renderer>(true);
+            Bounds bounds = new Bounds();
+            bool hasBounds = false;
+            foreach (Renderer itemRenderer in renderers)
+            {
+                if (itemRenderer == null) continue;
+                if (!hasBounds) { bounds = itemRenderer.bounds; hasBounds = true; }
+                else bounds.Encapsulate(itemRenderer.bounds);
+            }
+            if (hasBounds)
+            {
+                Vector3 centerInCartonSpace = visualRoot.InverseTransformPoint(bounds.center);
+                display.transform.localPosition += visualCenter - centerInCartonSpace;
+            }
+            else
+            {
+                display.transform.localPosition = visualCenter;
+            }
+
             display.SetActive(showProductModelsBeforeOpening || isOpen);
             productDisplays.Add(display);
         }
