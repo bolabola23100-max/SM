@@ -145,8 +145,6 @@ public class ProductInteraction : MonoBehaviour
         bodyBuffer.Clear();
 
         product.transform.rotation = Quaternion.Euler(data.rotation);
-        Physics.SyncTransforms();
-
         Bounds productBounds = GetWorldBounds(product);
         Vector3 visualCenterOffset = productBounds.center - product.transform.position;
         Bounds zoneBounds = zone.GetComponent<BoxCollider>().bounds;
@@ -170,8 +168,6 @@ public class ProductInteraction : MonoBehaviour
         product.transform.SetParent(zone.transform, true);
 
         // Apply the final transform to physics before registering the item.
-        Physics.SyncTransforms();
-
         if (!zone.RegisterProduct(product.transform))
         {
             Destroy(product);
