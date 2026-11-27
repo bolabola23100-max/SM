@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// A self-contained, procedural carton. Assign one ProductData asset and the
-/// carton automatically displays that product's prefab inside it.
+/// Procedural carton whose footprint and height are fitted to the product prefab
+/// and the actual pack count (not the shelf's layer setting).
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Rigidbody), typeof(BoxCollider))]
@@ -22,7 +22,6 @@ public class ProductBox : MonoBehaviour
     [Min(0.005f)][SerializeField] private float productHeight = 0.22f;
     [Min(0.005f)][SerializeField] private float wallThickness = 0.018f;
     [Min(0f)][SerializeField] private float padding = 0.035f;
-    [Range(0.25f, 1.5f)][SerializeField] private float wallHeightRatio = 0.72f;
 
     [Header("Appearance")]
     [SerializeField] private Color cartonColor = new Color(0.62f, 0.40f, 0.22f);
@@ -44,13 +43,9 @@ public class ProductBox : MonoBehaviour
     private Vector3 fittedProductCenterOffset;
     private bool displaysBuilt;
 
-    // Shared dimension cache: avoid repeatedly instantiating product prefabs just
-    // to measure their render bounds when multiple cartons use the same product.
     private struct ProductDimensions
     {
-        public float width;
-        public float depth;
-        public float height;
+        public float width, depth, height;
         public Vector3 centerOffset;
     }
     private static readonly Dictionary<EntityId, ProductDimensions> dimensionsCache = new Dictionary<EntityId, ProductDimensions>();
@@ -63,36 +58,24 @@ public class ProductBox : MonoBehaviour
 
     private void Awake()
     {
-        if (buildOnAwake)
-            BuildCarton();
+        if (buildOnAwake) BuildCarton();
     }
 
-    /// <summary>Assigns the product selected by the shop/purchase system.</summary>
     public void SetProduct(ProductData data, int amount = -1)
     {
         productData = data;
-        if (amount > 0)
-        {
-            useProductPackSize = false;
-            customCount = amount;
-        }
-        else
-        {
-            useProductPackSize = true;
-        }
+        if (amount > 0) { useProductPackSize = false; customCount = amount; }
+        else useProductPackSize = true;
 
         remainingCount = data != null
             ? (useProductPackSize ? Mathf.Max(1, data.packSize) : Mathf.Max(1, customCount))
             : 0;
-
-        if (Application.isPlaying)
-            BuildCarton();
+        if (Application.isPlaying) BuildCarton();
     }
 
     public void BuildCarton()
     {
         ClearGeneratedVisuals();
-
         if (productData == null || productData.productPrefab == null)
         {
             Debug.LogWarning($"ProductBox on '{name}' needs a ProductData with Product Prefab assigned.", this);
@@ -100,36 +83,30 @@ public class ProductBox : MonoBehaviour
             return;
         }
 
-        remainingCount = useProductPackSize
-            ? Mathf.Max(1, productData.packSize)
-            : Mathf.Max(1, customCount);
-
+        remainingCount = useProductPackSize ? Mathf.Max(1, productData.packSize) : Mathf.Max(1, customCount);
         MeasureProductDimensions();
 
-        // Use the layout configured for this product instead of the generic
-        // 3x2 prefab defaults. This keeps the purchased carton consistent with
-        // the product's intended packing layout (including its layer count).
-        columns = productData != null ? Mathf.Max(1, productData.columns) : Mathf.Max(1, columns);
-        rows = productData != null ? Mathf.Max(1, productData.rows) : Mathf.Max(1, rows);
-
+        // Fit the carton layout to the actual number of units. Shelf layers are
+        // intentionally not used here; they describe shelf capacity, not carton packing.
+        int configuredColumns = Mathf.Max(1, productData.columns);
+        int configuredRows = Mathf.Max(1, productData.rows);
+        columns = Mathf.Clamp(configuredColumns, 1, remainingCount);
+        rows = Mathf.Clamp(Mathf.CeilToInt((float)remainingCount / columns), 1, configuredRows);
+        if (columns * rows < remainingCount)
+            rows = Mathf.CeilToInt((float)remainingCount / columns);
         int perLayer = columns * rows;
-        int requiredLayers = Mathf.CeilToInt((float)remainingCount / perLayer);
-        int layers = productData != null
-            ? Mathf.Max(Mathf.Max(1, productData.layers), requiredLayers)
-            : requiredLayers;
+        int layers = Mathf.Max(1, Mathf.CeilToInt((float)remainingCount / perLayer));
 
         float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
         float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
         float innerY = layers * productHeight;
 
-        cartonSize = new Vector3(
-            innerX + 2f * (padding + wallThickness),
+        cartonSize = new Vector3(innerX + 2f * (padding + wallThickness),
             innerY + 2f * padding + wallThickness,
             innerZ + 2f * (padding + wallThickness));
 
         visualRoot = new GameObject("CartonVisuals").transform;
         visualRoot.SetParent(transform, false);
-
         Shader cartonShader = Shader.Find("Universal Render Pipeline/Lit");
         if (cartonShader == null) cartonShader = Shader.Find("Standard");
         if (cartonShader == null)
@@ -140,39 +117,24 @@ public class ProductBox : MonoBehaviour
         cartonMaterial = new Material(cartonShader);
         cartonMaterial.color = cartonColor;
 
-        float halfX = cartonSize.x * 0.5f;
-        float halfY = cartonSize.y * 0.5f;
-        float halfZ = cartonSize.z * 0.5f;
+        float halfX = cartonSize.x * 0.5f, halfY = cartonSize.y * 0.5f, halfZ = cartonSize.z * 0.5f;
         float t = wallThickness;
-
-        // Bottom and four cardboard sides.
-        AddPanel("Bottom", new Vector3(cartonSize.x, t, cartonSize.z),
-            new Vector3(0f, -halfY + t * 0.5f, 0f));
-        AddPanel("Front", new Vector3(cartonSize.x, cartonSize.y, t),
-            new Vector3(0f, 0f, halfZ - t * 0.5f));
-        AddPanel("Back", new Vector3(cartonSize.x, cartonSize.y, t),
-            new Vector3(0f, 0f, -halfZ + t * 0.5f));
-        AddPanel("Left", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t),
-            new Vector3(-halfX + t * 0.5f, 0f, 0f));
-        AddPanel("Right", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t),
-            new Vector3(halfX - t * 0.5f, 0f, 0f));
-
-        // Two hinged top flaps.
+        AddPanel("Bottom", new Vector3(cartonSize.x, t, cartonSize.z), new Vector3(0f, -halfY + t * 0.5f, 0f));
+        AddPanel("Front", new Vector3(cartonSize.x, cartonSize.y, t), new Vector3(0f, 0f, halfZ - t * 0.5f));
+        AddPanel("Back", new Vector3(cartonSize.x, cartonSize.y, t), new Vector3(0f, 0f, -halfZ + t * 0.5f));
+        AddPanel("Left", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t), new Vector3(-halfX + t * 0.5f, 0f, 0f));
+        AddPanel("Right", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t), new Vector3(halfX - t * 0.5f, 0f, 0f));
         leftFlap = CreateFlap("LeftFlap", -halfX, halfY, cartonSize.x * 0.5f, t, 1f);
         rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t, -1f);
 
-        // Keep the physical collider in sync with the generated carton.
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
         boxCollider.size = cartonSize;
-
         Rigidbody body = GetComponent<Rigidbody>();
         body.mass = Mathf.Max(0.2f, cartonSize.x * cartonSize.y * cartonSize.z * 2f);
         body.interpolation = RigidbodyInterpolation.Interpolate;
 
         displaysBuilt = false;
-        // Avoid instantiating a full pack of hidden product meshes for unopened cartons.
-        // Build these visual copies only when the carton is opened (or explicitly requested).
         if (showProductModelsBeforeOpening || isOpen)
         {
             BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
@@ -180,19 +142,14 @@ public class ProductBox : MonoBehaviour
         }
     }
 
-
-    // Read the actual visible size of the selected product prefab, including its scale
-    // and the rotation used when it is displayed inside the carton.
     private void MeasureProductDimensions()
     {
         GameObject prefab = productData.productPrefab;
         EntityId cacheKey = prefab.GetEntityId();
         if (dimensionsCache.TryGetValue(cacheKey, out ProductDimensions cached))
         {
-            fittedProductWidth = cached.width;
-            fittedProductDepth = cached.depth;
-            productHeight = cached.height;
-            fittedProductCenterOffset = cached.centerOffset;
+            fittedProductWidth = cached.width; fittedProductDepth = cached.depth;
+            productHeight = cached.height; fittedProductCenterOffset = cached.centerOffset;
             return;
         }
 
@@ -200,7 +157,6 @@ public class ProductBox : MonoBehaviour
         sample.hideFlags = HideFlags.HideAndDontSave;
         sample.transform.position = Vector3.zero;
         sample.transform.rotation = Quaternion.Euler(productData.rotation);
-
         Renderer[] renderers = sample.GetComponentsInChildren<Renderer>(true);
         Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
         bool hasBounds = false;
@@ -221,45 +177,31 @@ public class ProductBox : MonoBehaviour
         }
         else
         {
-            dimensions.width = productFootprint;
-            dimensions.depth = productFootprint;
-            dimensions.height = Mathf.Max(0.01f, productHeight);
-            dimensions.centerOffset = Vector3.zero;
-            Debug.LogWarning("Product prefab has no Renderer; using the fallback carton dimensions.", productData);
+            dimensions.width = productFootprint; dimensions.depth = productFootprint;
+            dimensions.height = Mathf.Max(0.01f, productHeight); dimensions.centerOffset = Vector3.zero;
+            Debug.LogWarning("Product prefab has no Renderer; using fallback carton dimensions.", productData);
         }
-
         dimensionsCache[cacheKey] = dimensions;
-        fittedProductWidth = dimensions.width;
-        fittedProductDepth = dimensions.depth;
-        productHeight = dimensions.height;
-        fittedProductCenterOffset = dimensions.centerOffset;
-
-        if (Application.isPlaying) Destroy(sample);
-        else DestroyImmediate(sample);
+        fittedProductWidth = dimensions.width; fittedProductDepth = dimensions.depth;
+        productHeight = dimensions.height; fittedProductCenterOffset = dimensions.centerOffset;
+        if (Application.isPlaying) Destroy(sample); else DestroyImmediate(sample);
     }
 
-    private void BuildProductDisplays(int cols, int rowCount, int layers,
-        float innerX, float innerZ, float innerY, int perLayer)
+    private void BuildProductDisplays(int cols, int rowCount, int layers, float innerX, float innerZ, float innerY, int perLayer)
     {
         for (int i = 0; i < remainingCount; i++)
         {
             GameObject display = Instantiate(productData.productPrefab, visualRoot);
             display.name = $"Inside_{productData.productName}_{i + 1}";
             DisableDisplayPhysicsAndScripts(display);
-
-            int layer = i / perLayer;
-            int indexInLayer = i % perLayer;
-            int col = indexInLayer % cols;
-            int row = indexInLayer / cols;
-
+            int layer = i / perLayer, indexInLayer = i % perLayer;
+            int col = indexInLayer % cols, row = indexInLayer / cols;
             Vector3 visualCenter = new Vector3(
                 -innerX * 0.5f + fittedProductWidth * 0.5f + col * (fittedProductWidth + productSpacing),
                 -cartonSize.y * 0.5f + wallThickness + padding + productHeight * (layer + 0.5f),
                 -innerZ * 0.5f + fittedProductDepth * 0.5f + row * (fittedProductDepth + productSpacing));
-
             Quaternion productRotation = Quaternion.Euler(productData.rotation);
-            Vector3 pivotToVisualCenter = productRotation * Vector3.Scale(
-                productData.productPrefab.transform.localScale, fittedProductCenterOffset);
+            Vector3 pivotToVisualCenter = productRotation * Vector3.Scale(productData.productPrefab.transform.localScale, fittedProductCenterOffset);
             display.transform.localPosition = visualCenter - pivotToVisualCenter;
             display.transform.localRotation = productRotation;
             display.transform.localScale = productData.productPrefab.transform.localScale;
@@ -273,7 +215,6 @@ public class ProductBox : MonoBehaviour
         Transform pivot = new GameObject(flapName).transform;
         pivot.SetParent(visualRoot, false);
         pivot.localPosition = new Vector3(hingeX, topY, 0f);
-
         GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
         panel.name = "CardboardPanel";
         panel.transform.SetParent(pivot, false);
@@ -286,95 +227,62 @@ public class ProductBox : MonoBehaviour
     private void AddPanel(string panelName, Vector3 size, Vector3 localPosition)
     {
         GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        panel.name = panelName;
-        panel.transform.SetParent(visualRoot, false);
-        panel.transform.localPosition = localPosition;
-        panel.transform.localScale = size;
+        panel.name = panelName; panel.transform.SetParent(visualRoot, false);
+        panel.transform.localPosition = localPosition; panel.transform.localScale = size;
         ApplyCartonMaterial(panel);
     }
 
     private void ApplyCartonMaterial(GameObject panel)
     {
         Collider panelCollider = panel.GetComponent<Collider>();
-        if (panelCollider != null)
-            Destroy(panelCollider);
-
+        if (panelCollider != null) Destroy(panelCollider);
         Renderer panelRenderer = panel.GetComponent<Renderer>();
-        if (panelRenderer != null)
-            panelRenderer.sharedMaterial = cartonMaterial;
+        if (panelRenderer != null) panelRenderer.sharedMaterial = cartonMaterial;
     }
 
     private static void DisableDisplayPhysicsAndScripts(GameObject display)
     {
-        foreach (Collider itemCollider in display.GetComponentsInChildren<Collider>(true))
-            itemCollider.enabled = false;
-
+        foreach (Collider itemCollider in display.GetComponentsInChildren<Collider>(true)) itemCollider.enabled = false;
         foreach (Rigidbody itemBody in display.GetComponentsInChildren<Rigidbody>(true))
-        {
-            itemBody.isKinematic = true;
-            itemBody.useGravity = false;
-        }
-
-        // The displayed copies are visual-only. Their gameplay scripts must not
-        // run while they are still inside the carton.
-        foreach (MonoBehaviour behaviour in display.GetComponentsInChildren<MonoBehaviour>(true))
-            behaviour.enabled = false;
+        { itemBody.isKinematic = true; itemBody.useGravity = false; }
+        foreach (MonoBehaviour behaviour in display.GetComponentsInChildren<MonoBehaviour>(true)) behaviour.enabled = false;
     }
 
     public bool Open()
     {
-        if (isOpen || IsEmpty || productData == null)
-            return false;
-
+        if (isOpen || IsEmpty || productData == null) return false;
         isOpen = true;
         if (!displaysBuilt && visualRoot != null)
         {
             int perLayer = Mathf.Max(1, columns * rows);
-            int layers = Mathf.CeilToInt((float)remainingCount / perLayer);
+            int layers = Mathf.Max(1, Mathf.CeilToInt((float)remainingCount / perLayer));
             float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
             float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
             float innerY = layers * productHeight;
             BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
             displaysBuilt = true;
         }
-        foreach (GameObject display in productDisplays)
-            if (display != null) display.SetActive(true);
-
-        if (leftFlap != null)
-            leftFlap.localRotation = Quaternion.Euler(0f, 0f, 125f);
-        if (rightFlap != null)
-            rightFlap.localRotation = Quaternion.Euler(0f, 0f, -125f);
-
+        foreach (GameObject display in productDisplays) if (display != null) display.SetActive(true);
+        if (leftFlap != null) leftFlap.localRotation = Quaternion.Euler(0f, 0f, 125f);
+        if (rightFlap != null) rightFlap.localRotation = Quaternion.Euler(0f, 0f, -125f);
         return true;
     }
 
     public bool Close()
     {
-        if (!isOpen)
-            return false;
-
+        if (!isOpen) return false;
         isOpen = false;
-        foreach (GameObject display in productDisplays)
-            if (display != null) display.SetActive(showProductModelsBeforeOpening);
-
+        foreach (GameObject display in productDisplays) if (display != null) display.SetActive(showProductModelsBeforeOpening);
         if (leftFlap != null) leftFlap.localRotation = Quaternion.identity;
         if (rightFlap != null) rightFlap.localRotation = Quaternion.identity;
         return true;
     }
 
-    /// <summary>
-    /// Creates one real product object. The carton count decreases only after
-    /// the product instance has been created successfully.
-    /// </summary>
     public GameObject TakeOne()
     {
-        if (!isOpen || IsEmpty || productData == null || productData.productPrefab == null)
-            return null;
-
+        if (!isOpen || IsEmpty || productData == null || productData.productPrefab == null) return null;
         GameObject product = Instantiate(productData.productPrefab);
-        if (product == null)
-            return null;
-
+        if (product == null) return null;
         product.name = productData.productName;
         int last = productDisplays.Count - 1;
         if (last >= 0)
@@ -383,44 +291,31 @@ public class ProductBox : MonoBehaviour
             productDisplays.RemoveAt(last);
             if (display != null) Destroy(display);
         }
-
         remainingCount--;
         return product;
     }
 
     public void GiveBack(GameObject product)
     {
-        if (product == null || productData == null)
-            return;
-
+        if (product == null || productData == null) return;
         Destroy(product);
         remainingCount++;
         BuildCarton();
         if (isOpen) Open();
     }
 
-    public void Vanish()
-    {
-        Destroy(gameObject);
-    }
+    public void Vanish() { Destroy(gameObject); }
 
     private void ClearGeneratedVisuals()
     {
         if (visualRoot != null)
         {
-            if (Application.isPlaying) Destroy(visualRoot.gameObject);
-            else DestroyImmediate(visualRoot.gameObject);
+            if (Application.isPlaying) Destroy(visualRoot.gameObject); else DestroyImmediate(visualRoot.gameObject);
         }
-
-        productDisplays.Clear();
-        displaysBuilt = false;
-        leftFlap = null;
-        rightFlap = null;
-
+        productDisplays.Clear(); displaysBuilt = false; leftFlap = null; rightFlap = null;
         if (cartonMaterial != null)
         {
-            if (Application.isPlaying) Destroy(cartonMaterial);
-            else DestroyImmediate(cartonMaterial);
+            if (Application.isPlaying) Destroy(cartonMaterial); else DestroyImmediate(cartonMaterial);
             cartonMaterial = null;
         }
     }
@@ -428,13 +323,9 @@ public class ProductBox : MonoBehaviour
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        customCount = Mathf.Max(1, customCount);
-        columns = Mathf.Max(1, columns);
-        rows = Mathf.Max(1, rows);
-        productFootprint = Mathf.Max(0.005f, productFootprint);
-        productHeight = Mathf.Max(0.005f, productHeight);
-        wallThickness = Mathf.Max(0.005f, wallThickness);
-        productSpacing = Mathf.Max(0f, productSpacing);
+        customCount = Mathf.Max(1, customCount); columns = Mathf.Max(1, columns); rows = Mathf.Max(1, rows);
+        productFootprint = Mathf.Max(0.005f, productFootprint); productHeight = Mathf.Max(0.005f, productHeight);
+        wallThickness = Mathf.Max(0.005f, wallThickness); productSpacing = Mathf.Max(0f, productSpacing);
         padding = Mathf.Max(0f, padding);
     }
 #endif
