@@ -42,23 +42,13 @@ public class ShelfPlacement : MonoBehaviour
             rb.useGravity = false;
         }
 
+        // Cache renderers only. Preview materials are created lazily when the
+        // shelf is actually picked up, avoiding startup allocations for every shelf.
         shelfRenderers = GetComponentsInChildren<Renderer>(true);
         originalMaterials = new Material[shelfRenderers.Length][];
-        previewMaterials = new Material[shelfRenderers.Length][];
-
+        previewMaterials = null;
         for (int i = 0; i < shelfRenderers.Length; i++)
-        {
-            Material[] source = shelfRenderers[i].sharedMaterials;
-            originalMaterials[i] = source;
-            previewMaterials[i] = new Material[source.Length];
-
-            for (int j = 0; j < source.Length; j++)
-            {
-                if (source[j] == null) continue;
-
-                previewMaterials[i][j] = CreatePreviewMaterial(source[j]);
-            }
-        }
+            originalMaterials[i] = shelfRenderers[i] != null ? shelfRenderers[i].sharedMaterials : null;
     }
 
     private void Update()
@@ -101,6 +91,7 @@ public class ShelfPlacement : MonoBehaviour
             rb.useGravity = false;
         }
 
+        EnsurePreviewMaterials();
         ApplyPlacementPreview(false);
     }
 
@@ -144,6 +135,19 @@ public class ShelfPlacement : MonoBehaviour
         if (canPlace == valid && isHeld) return;
         canPlace = valid;
         if (isHeld) ApplyPlacementPreview(valid);
+    }
+
+    private void EnsurePreviewMaterials()
+    {
+        if (previewMaterials != null) return;
+        previewMaterials = new Material[shelfRenderers.Length][];
+        for (int i = 0; i < shelfRenderers.Length; i++)
+        {
+            Material[] source = originalMaterials[i];
+            previewMaterials[i] = source != null ? new Material[source.Length] : new Material[0];
+            for (int j = 0; j < previewMaterials[i].Length; j++)
+                if (source[j] != null) previewMaterials[i][j] = CreatePreviewMaterial(source[j]);
+        }
     }
 
     private void ApplyPlacementPreview(bool valid)
