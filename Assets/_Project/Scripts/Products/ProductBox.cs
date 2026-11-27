@@ -22,6 +22,10 @@ public class ProductBox : MonoBehaviour
     [Min(0.005f)][SerializeField] private float productHeight = 0.22f;
     [Min(0.005f)][SerializeField] private float wallThickness = 0.018f;
     [Min(0f)][SerializeField] private float padding = 0.035f;
+    [Header("Carton size limits (meters)")]
+    [Min(0.05f)][SerializeField] private float maxCartonWidth = 0.65f;
+    [Min(0.05f)][SerializeField] private float maxCartonDepth = 0.50f;
+    [Min(0.05f)][SerializeField] private float maxCartonHeight = 0.55f;
 
     [Header("Appearance")]
     [SerializeField] private Color cartonColor = new Color(0.62f, 0.40f, 0.22f);
@@ -92,16 +96,30 @@ public class ProductBox : MonoBehaviour
         rows = 4;
         productSpacing = Mathf.Clamp(productSpacing, 0.004f, 0.012f);
         padding = Mathf.Clamp(padding, 0.012f, 0.025f);
+        // Fit the carton to fixed size limits, uniformly scaling the displayed units if needed.
+        float fitScale = Mathf.Min(1f,
+            (maxCartonWidth - 2f * (padding + wallThickness) - (columns - 1) * productSpacing) / (columns * fittedProductWidth),
+            (maxCartonDepth - 2f * (padding + wallThickness) - (rows - 1) * productSpacing) / (rows * fittedProductDepth));
+        fitScale = Mathf.Clamp(fitScale, 0.01f, 1f);
+        fittedProductWidth *= fitScale;
+        fittedProductDepth *= fitScale;
+        productHeight *= fitScale;
+        fittedProductCenterOffset *= fitScale;
+
         int perLayer = columns * rows;
-        int layers = Mathf.Max(1, Mathf.CeilToInt((float)remainingCount / perLayer));
+        float maxInnerHeight = maxCartonHeight - 2f * padding - wallThickness;
+        int maxLayers = Mathf.Max(1, Mathf.FloorToInt(maxInnerHeight / productHeight));
+        int layers = Mathf.Clamp(Mathf.CeilToInt((float)remainingCount / perLayer), 1, maxLayers);
+        remainingCount = Mathf.Min(remainingCount, perLayer * layers);
 
         float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
         float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
         float innerY = layers * productHeight;
 
-        cartonSize = new Vector3(innerX + 2f * (padding + wallThickness),
-            innerY + 2f * padding + wallThickness,
-            innerZ + 2f * (padding + wallThickness));
+        cartonSize = new Vector3(
+            Mathf.Min(maxCartonWidth, innerX + 2f * (padding + wallThickness)),
+            Mathf.Min(maxCartonHeight, innerY + 2f * padding + wallThickness),
+            Mathf.Min(maxCartonDepth, innerZ + 2f * (padding + wallThickness)));
 
         visualRoot = new GameObject("CartonVisuals").transform;
         visualRoot.SetParent(transform, false);
