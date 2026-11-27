@@ -94,7 +94,7 @@ public class PlacementChecker : MonoBehaviour
         }
 
         int hitCount = Physics.OverlapBoxNonAlloc(center, halfExtents, overlapBuffer,
-            orientation, blockingLayers, QueryTriggerInteraction.Ignore);
+            orientation, ~0, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < hitCount; i++)
         {
             Collider hit = overlapBuffer[i];
