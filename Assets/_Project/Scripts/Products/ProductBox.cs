@@ -119,9 +119,14 @@ public class ProductBox : MonoBehaviour
         visualRoot = new GameObject("CartonVisuals").transform;
         visualRoot.SetParent(transform, false);
 
-        cartonMaterial = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-        if (cartonMaterial.shader == null)
-            cartonMaterial.shader = Shader.Find("Standard");
+        Shader cartonShader = Shader.Find("Universal Render Pipeline/Lit");
+        if (cartonShader == null) cartonShader = Shader.Find("Standard");
+        if (cartonShader == null)
+        {
+            Debug.LogError("ProductBox: no compatible carton shader was found.", this);
+            return;
+        }
+        cartonMaterial = new Material(cartonShader);
         cartonMaterial.color = cartonColor;
 
         float halfX = cartonSize.x * 0.5f;
