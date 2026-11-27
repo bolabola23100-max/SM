@@ -129,6 +129,11 @@ public class DayNightCycle : MonoBehaviour
         Debug.Log("DAY/NIGHT CYCLE READY — Day " + Day + ", " + GetTimeText());
     }
 
+    // Lighting and skybox updates are expensive; the clock still advances every frame,
+    // but global lighting is refreshed at a small fixed interval instead of continuously.
+    private float lightingRefreshTimer;
+    private const float LightingRefreshInterval = 0.15f;
+
     private void Update()
     {
         if (!running || !IsStoreOpen)
@@ -136,17 +141,23 @@ public class DayNightCycle : MonoBehaviour
 
         float hoursPerSecond = (endHour - startHour) / (Mathf.Max(0.1f, dayLengthMinutes) * 60f);
         TimeOfDay += Time.deltaTime * hoursPerSecond * timeScale;
+        lightingRefreshTimer += Time.deltaTime;
 
         if (TimeOfDay >= endHour)
         {
             TimeOfDay = endHour;
             ApplyLighting();
+            lightingRefreshTimer = 0f;
             EmitClockChanges(false);
             TimeOver();
             return;
         }
 
-        ApplyLighting();
+        if (lightingRefreshTimer >= LightingRefreshInterval)
+        {
+            lightingRefreshTimer = 0f;
+            ApplyLighting();
+        }
         EmitClockChanges(false);
     }
 
