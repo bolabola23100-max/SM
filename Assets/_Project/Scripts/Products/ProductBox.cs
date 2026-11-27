@@ -86,35 +86,12 @@ public class ProductBox : MonoBehaviour
         remainingCount = useProductPackSize ? Mathf.Max(1, productData.packSize) : Mathf.Max(1, customCount);
         MeasureProductDimensions();
 
-        // Choose a compact, near-square footprint for a normal-looking carton.
-        // The product count and real prefab dimensions still determine the final size.
+        // Fixed carton arrangement: 5 units along the length and 4 across the width.
+        // The carton footprint stays consistent; extra units are stacked in layers.
+        columns = 5;
+        rows = 4;
         productSpacing = Mathf.Clamp(productSpacing, 0.004f, 0.012f);
         padding = Mathf.Clamp(padding, 0.012f, 0.025f);
-        int bestColumns = 1;
-        int bestRows = remainingCount;
-        float bestScore = float.MaxValue;
-
-        for (int candidateColumns = 1; candidateColumns <= remainingCount; candidateColumns++)
-        {
-            int candidateRows = Mathf.CeilToInt((float)remainingCount / candidateColumns);
-            float candidateWidth = candidateColumns * fittedProductWidth + (candidateColumns - 1) * productSpacing;
-            float candidateDepth = candidateRows * fittedProductDepth + (candidateRows - 1) * productSpacing;
-            float ratio = Mathf.Max(candidateWidth, candidateDepth) / Mathf.Max(0.001f, Mathf.Min(candidateWidth, candidateDepth));
-
-            // Prefer a square/short-rectangle footprint without making the carton needlessly large.
-            float area = candidateWidth * candidateDepth;
-            float shapePenalty = 1f + Mathf.Abs(Mathf.Log(ratio / 1.18f)) * 1.35f;
-            float score = area * shapePenalty;
-            if (score < bestScore)
-            {
-                bestScore = score;
-                bestColumns = candidateColumns;
-                bestRows = candidateRows;
-            }
-        }
-
-        columns = bestColumns;
-        rows = bestRows;
         int perLayer = columns * rows;
         int layers = Mathf.Max(1, Mathf.CeilToInt((float)remainingCount / perLayer));
 
