@@ -42,6 +42,7 @@ public class ProductBox : MonoBehaviour
     private float fittedProductWidth;
     private float fittedProductDepth;
     private Vector3 fittedProductCenterOffset;
+    private bool displaysBuilt;
 
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
@@ -153,7 +154,14 @@ public class ProductBox : MonoBehaviour
         body.mass = Mathf.Max(0.2f, cartonSize.x * cartonSize.y * cartonSize.z * 2f);
         body.interpolation = RigidbodyInterpolation.Interpolate;
 
-        BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
+        displaysBuilt = false;
+        // Avoid instantiating a full pack of hidden product meshes for unopened cartons.
+        // Build these visual copies only when the carton is opened (or explicitly requested).
+        if (showProductModelsBeforeOpening || isOpen)
+        {
+            BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
+            displaysBuilt = true;
+        }
     }
 
 
@@ -298,6 +306,16 @@ public class ProductBox : MonoBehaviour
             return false;
 
         isOpen = true;
+        if (!displaysBuilt && visualRoot != null)
+        {
+            int perLayer = Mathf.Max(1, columns * rows);
+            int layers = Mathf.CeilToInt((float)remainingCount / perLayer);
+            float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
+            float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
+            float innerY = layers * productHeight;
+            BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
+            displaysBuilt = true;
+        }
         foreach (GameObject display in productDisplays)
             if (display != null) display.SetActive(true);
 
@@ -374,6 +392,7 @@ public class ProductBox : MonoBehaviour
         }
 
         productDisplays.Clear();
+        displaysBuilt = false;
         leftFlap = null;
         rightFlap = null;
 
