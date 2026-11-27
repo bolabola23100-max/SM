@@ -74,6 +74,8 @@ public class ComputerShopUI : MonoBehaviour
     private bool hasMonitorSurface;
     private Transform monitorSurfaceTransform;
     private string currentPage = "Store";
+    private bool showAllCategories = true;
+    private ProductCategory selectedCategory = ProductCategory.Shelf;
 
     private CursorLockMode previousLockState;
     private bool previousCursorVisible;
@@ -345,7 +347,37 @@ public class ComputerShopUI : MonoBehaviour
         CreateText(contentArea, "AVAILABLE PRODUCTS", 32, FontStyle.Bold,
             new Vector2(0.025f, 0.91f), new Vector2(0.70f, 0.99f), TextAnchor.MiddleLeft, ink);
 
-        CreateScrollArea(contentArea, new Vector2(0.02f, 0.04f), new Vector2(0.98f, 0.89f),
+        // Category tabs use the exact ProductCategory values assigned on ProductData assets.
+        string[] labels = { "ALL", "SHELF", "FRIDGE", "FREEZER", "VEGETABLES" };
+        ProductCategory[] categories = {
+            ProductCategory.Shelf, ProductCategory.Shelf, ProductCategory.Fridge,
+            ProductCategory.Freezer, ProductCategory.Vegetables
+        };
+        int tabCount = labels.Length;
+        float left = 0.02f;
+        float right = 0.98f;
+        float gap = 0.012f;
+        float tabWidth = (right - left - gap * (tabCount - 1)) / tabCount;
+
+        for (int i = 0; i < tabCount; i++)
+        {
+            int tabIndex = i;
+            bool active = i == 0 ? showAllCategories : (!showAllCategories && selectedCategory == categories[i]);
+            Color tabColor = active ? green : new Color(0.14f, 0.30f, 0.40f);
+            Color textColor = Color.white;
+            float xMin = left + i * (tabWidth + gap);
+            float xMax = xMin + tabWidth;
+            CreateButton(contentArea, labels[i],
+                new Vector2(xMin, 0.79f), new Vector2(xMax, 0.88f),
+                tabColor, textColor, () =>
+                {
+                    if (tabIndex == 0) showAllCategories = true;
+                    else { showAllCategories = false; selectedCategory = categories[tabIndex]; }
+                    BuildStorePageRefresh();
+                });
+        }
+
+        CreateScrollArea(contentArea, new Vector2(0.02f, 0.04f), new Vector2(0.98f, 0.76f),
             out RectTransform content);
         if (productDatabase == null || productDatabase.Products.Count == 0)
         {
@@ -355,17 +387,31 @@ public class ComputerShopUI : MonoBehaviour
         }
 
         selectedQuantityLabels.Clear();
-
+        int visibleProducts = 0;
         foreach (ProductData data in productDatabase.Products)
         {
             if (data == null || data.productPrefab == null)
                 continue;
+            if (!showAllCategories && data.category != selectedCategory)
+                continue;
 
+            visibleProducts++;
             if (!selectedQuantities.ContainsKey(data))
                 selectedQuantities[data] = 1;
-
             CreateStoreProductRow(content, data);
         }
+
+        if (visibleProducts == 0)
+            CreateText(content, "NO PRODUCTS IN THIS CATEGORY.", 26, FontStyle.Bold,
+                new Vector2(0.05f, 0.7f), new Vector2(0.95f, 0.9f), TextAnchor.MiddleCenter, muted);
+    }
+
+    private void BuildStorePageRefresh()
+    {
+        ClearContent();
+        SetStatus(string.Empty);
+        RefreshHeader();
+        BuildStorePage();
     }
 
     private void CreateStoreProductRow(RectTransform parent, ProductData data)
