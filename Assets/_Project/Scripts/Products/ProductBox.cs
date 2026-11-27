@@ -44,6 +44,17 @@ public class ProductBox : MonoBehaviour
     private Vector3 fittedProductCenterOffset;
     private bool displaysBuilt;
 
+    // Shared dimension cache: avoid repeatedly instantiating product prefabs just
+    // to measure their render bounds when multiple cartons use the same product.
+    private struct ProductDimensions
+    {
+        public float width;
+        public float depth;
+        public float height;
+        public Vector3 centerOffset;
+    }
+    private static readonly Dictionary<int, ProductDimensions> dimensionsCache = new Dictionary<int, ProductDimensions>();
+
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
     public bool IsOpen => isOpen;
@@ -174,7 +185,18 @@ public class ProductBox : MonoBehaviour
     // and the rotation used when it is displayed inside the carton.
     private void MeasureProductDimensions()
     {
-        GameObject sample = Instantiate(productData.productPrefab);
+        GameObject prefab = productData.productPrefab;
+        int cacheKey = prefab.GetInstanceID();
+        if (dimensionsCache.TryGetValue(cacheKey, out ProductDimensions cached))
+        {
+            fittedProductWidth = cached.width;
+            fittedProductDepth = cached.depth;
+            productHeight = cached.height;
+            fittedProductCenterOffset = cached.centerOffset;
+            return;
+        }
+
+        GameObject sample = Instantiate(prefab);
         sample.hideFlags = HideFlags.HideAndDontSave;
         sample.transform.position = Vector3.zero;
         sample.transform.rotation = Quaternion.Euler(productData.rotation);
@@ -182,44 +204,38 @@ public class ProductBox : MonoBehaviour
         Renderer[] renderers = sample.GetComponentsInChildren<Renderer>(true);
         Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
         bool hasBounds = false;
-
         foreach (Renderer itemRenderer in renderers)
         {
-            if (itemRenderer == null)
-                continue;
-
-            if (!hasBounds)
-            {
-                bounds = itemRenderer.bounds;
-                hasBounds = true;
-            }
-            else
-            {
-                bounds.Encapsulate(itemRenderer.bounds);
-            }
+            if (itemRenderer == null) continue;
+            if (!hasBounds) { bounds = itemRenderer.bounds; hasBounds = true; }
+            else bounds.Encapsulate(itemRenderer.bounds);
         }
 
+        ProductDimensions dimensions;
         if (hasBounds)
         {
-            fittedProductWidth = Mathf.Max(0.01f, bounds.size.x);
-            fittedProductDepth = Mathf.Max(0.01f, bounds.size.z);
-            productHeight = Mathf.Max(0.01f, bounds.size.y);
-            // Compensate for prefabs whose pivot is not at the visual center.
-            fittedProductCenterOffset = sample.transform.InverseTransformPoint(bounds.center);
+            dimensions.width = Mathf.Max(0.01f, bounds.size.x);
+            dimensions.depth = Mathf.Max(0.01f, bounds.size.z);
+            dimensions.height = Mathf.Max(0.01f, bounds.size.y);
+            dimensions.centerOffset = sample.transform.InverseTransformPoint(bounds.center);
         }
         else
         {
-            fittedProductWidth = productFootprint;
-            fittedProductDepth = productFootprint;
-            productHeight = Mathf.Max(0.01f, productHeight);
-            fittedProductCenterOffset = Vector3.zero;
+            dimensions.width = productFootprint;
+            dimensions.depth = productFootprint;
+            dimensions.height = Mathf.Max(0.01f, productHeight);
+            dimensions.centerOffset = Vector3.zero;
             Debug.LogWarning("Product prefab has no Renderer; using the fallback carton dimensions.", productData);
         }
 
-        if (Application.isPlaying)
-            Destroy(sample);
-        else
-            DestroyImmediate(sample);
+        dimensionsCache[cacheKey] = dimensions;
+        fittedProductWidth = dimensions.width;
+        fittedProductDepth = dimensions.depth;
+        productHeight = dimensions.height;
+        fittedProductCenterOffset = dimensions.centerOffset;
+
+        if (Application.isPlaying) Destroy(sample);
+        else DestroyImmediate(sample);
     }
 
     private void BuildProductDisplays(int cols, int rowCount, int layers,
