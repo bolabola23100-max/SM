@@ -13,6 +13,7 @@ public class CustomerAgent : MonoBehaviour
     private Transform carryPoint;
     private readonly List<ProductItem> carriedProducts = new List<ProductItem>();
     private readonly List<ProductItem> conveyorProducts = new List<ProductItem>();
+    private readonly HashSet<ProductItem> scannedConveyorProducts = new HashSet<ProductItem>();
     private int desiredProductCount = 1;
     private float moveSpeed = 1.35f;
     private float arriveDistance = 0.35f;
@@ -228,6 +229,7 @@ public class CustomerAgent : MonoBehaviour
         }
 
         conveyorProducts.Clear();
+        scannedConveyorProducts.Clear();
         for (int i = 0; i < carriedProducts.Count; i++)
         {
             ProductItem product = carriedProducts[i];
@@ -235,13 +237,8 @@ public class CustomerAgent : MonoBehaviour
 
             Transform itemTransform = product.transform;
             itemTransform.SetParent(null, true);
-            // Arrange the basket in a short row beside the scanner so every item can be targeted.
-            float sideOffset = (i - (carriedProducts.Count - 1) * 0.5f) * 0.32f;
-            itemTransform.SetPositionAndRotation(
-                owner.ScannerPoint.position + owner.ScannerPoint.right * sideOffset,
-                owner.ScannerPoint.rotation);
 
-            Collider[] colliders = product.GetComponentsInChildren<Collider>();
+            Collider[] colliders = product.GetComponentsInChildren<Collider>(true);
             foreach (Collider itemCollider in colliders) itemCollider.enabled = true;
 
             Rigidbody body = product.GetComponent<Rigidbody>();
@@ -257,7 +254,50 @@ public class CustomerAgent : MonoBehaviour
         }
 
         carriedProducts.Clear();
-        Debug.Log("[CustomerAgent] Customer placed " + conveyorProducts.Count + " products at ScannerPoint.");
+        ArrangeConveyorProducts();
+        Debug.Log("[CustomerAgent] Customer placed " + conveyorProducts.Count + " products in the checkout queue (max 3 visible on the belt).");
+    }
+
+    /// <summary>Marks one item as scanned and advances the next waiting item onto the belt.</summary>
+    public void OnProductScanned(ProductItem product)
+    {
+        if (product == null || !conveyorProducts.Contains(product)) return;
+        scannedConveyorProducts.Add(product);
+        ArrangeConveyorProducts();
+    }
+
+    private void ArrangeConveyorProducts()
+    {
+        if (owner == null || owner.ScannerPoint == null) return;
+
+        int beltIndex = 0;
+        int waitingIndex = 0;
+        for (int i = 0; i < conveyorProducts.Count; i++)
+        {
+            ProductItem product = conveyorProducts[i];
+            if (product == null || scannedConveyorProducts.Contains(product)) continue;
+
+            Transform itemTransform = product.transform;
+            itemTransform.SetParent(null, true);
+            Vector3 position;
+
+            if (beltIndex < 3)
+            {
+                // Three fixed positions: left, centre, right. A scan advances the queue.
+                float sideOffset = (beltIndex - 1) * 0.32f;
+                position = owner.ScannerPoint.position + owner.ScannerPoint.right * sideOffset;
+                beltIndex++;
+            }
+            else
+            {
+                // Extra products wait behind the belt and move forward as slots become free.
+                position = owner.ScannerPoint.position
+                    - owner.ScannerPoint.forward * (0.65f + waitingIndex * 0.32f);
+                waitingIndex++;
+            }
+
+            itemTransform.SetPositionAndRotation(position, owner.ScannerPoint.rotation);
+        }
     }
 
     public void LeaveAfterPayment()
@@ -265,6 +305,7 @@ public class CustomerAgent : MonoBehaviour
         if (state == State.Leaving) return;
         state = State.Leaving;
         conveyorProducts.Clear();
+        scannedConveyorProducts.Clear();
         carriedProducts.Clear();
         SetDestination(owner.GetExitPosition());
     }
