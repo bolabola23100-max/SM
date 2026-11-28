@@ -730,19 +730,6 @@ public class ComputerShopUI : MonoBehaviour
                     Vector3 scaleBefore = carton.transform.localScale;
                     carton.SetProduct(data, data.packSize);
 
-                    BoxCollider cartonCollider = carton.GetComponent<BoxCollider>();
-                    if (cartonCollider != null)
-                    {
-                        float topHeight = carton.transform.position.y + cartonCollider.bounds.extents.y
-                            - deliveryPoint.position.y;
-                        if (topHeight > receivingHeightLimit)
-                        {
-                            Destroy(carton.gameObject);
-                            Debug.LogWarning("[Order] Carton rejected: 4 m receiving height limit reached.", carton);
-                            continue;
-                        }
-                    }
-
                     Debug.Log("[Order] " + data.productName + " #" + (i + 1) +
                         " | scale before: " + scaleBefore +
                         " | scale after: " + carton.transform.localScale +
