@@ -160,12 +160,25 @@ public class CustomerAgent : MonoBehaviour
             Collider[] colliders = item.GetComponentsInChildren<Collider>();
             foreach (Collider itemCollider in colliders) itemCollider.enabled = false;
 
+            // Keep the product's original world size: the temporary customer capsule
+            // is scaled down, so parenting directly would shrink the product too.
+            Vector3 originalWorldScale = item.transform.lossyScale;
             item.transform.SetParent(carryPoint, false);
+            Vector3 parentScale = carryPoint.lossyScale;
+            item.transform.localScale = new Vector3(
+                SafeScaleDivide(originalWorldScale.x, parentScale.x),
+                SafeScaleDivide(originalWorldScale.y, parentScale.y),
+                SafeScaleDivide(originalWorldScale.z, parentScale.z));
             item.transform.localPosition = Vector3.zero;
             item.transform.localRotation = Quaternion.identity;
             return true;
         }
         return false;
+    }
+
+    private static float SafeScaleDivide(float value, float divisor)
+    {
+        return Mathf.Abs(divisor) < 0.0001f ? value : value / divisor;
     }
 
     private void LeaveWithoutPurchase()
