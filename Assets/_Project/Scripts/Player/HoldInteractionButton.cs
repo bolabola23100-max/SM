@@ -9,6 +9,7 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
     public ProductInteraction productInteraction;
     public FurnitureController furnitureController;
     public ComputerInteraction computerInteraction;
+    public CheckoutStation checkoutStation;
     public Image holdProgressImage;
 
     [Header("Settings")]
@@ -21,7 +22,12 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
     private float pressStartTime;
     private ShelfPlacement targetShelf;
 
-    private void Awake() => SetProgress(0f);
+    private void Awake()
+    {
+        SetProgress(0f);
+        if (checkoutStation == null)
+            checkoutStation = FindFirstObjectByType<CheckoutStation>();
+    }
 
     private void Update()
     {
@@ -99,6 +105,10 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
             productInteraction.Interact();
             return;
         }
+
+        // Checkout is entered ONLY through this Interact Button, never by tapping the cashier.
+        if (checkoutStation != null && checkoutStation.TryInteract())
+            return;
 
         // A computer is entered/exited with the same InteractButton.
         if (computerInteraction != null && computerInteraction.TryInteract())
