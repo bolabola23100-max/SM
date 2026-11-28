@@ -32,9 +32,4 @@ public class MobileJoystick : MonoBehaviour, IPointerDownHandler, IDragHandler, 
         InputDirection = position / HandleRange;
     }
 
-    public void OnPointerUp(PointerEventData eventData)
-    {
-        handle.anchoredPosition = Vector2.zero;
-        InputDirection = Vector2.zero;
-    }
-}
+    public void OnPointerUp(PointerEventData eventData)\n    {\n        ResetInput();\n    }\n\n    public void ResetInput()\n    {\n        if (handle) handle.anchoredPosition = Vector2.zero;\n        InputDirection = Vector2.zero;\n    }\n}
