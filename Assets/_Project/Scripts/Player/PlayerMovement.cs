@@ -23,7 +23,9 @@ public class PlayerMovement : MonoBehaviour
     private float verticalVelocity;
     private float cameraRotationX;
 
-    private bool jumpRequested;\n\n    [HideInInspector] public bool MovementLocked;
+    private bool jumpRequested;
+
+    [HideInInspector] public bool MovementLocked;
 
     void Start()
     {
@@ -32,7 +34,12 @@ public class PlayerMovement : MonoBehaviour
 
     void Update()
     {
-        MovePlayer();
+        if (!MovementLocked)
+            MovePlayer();
+        else
+            jumpRequested = false;
+
+        // Keep camera look active while checkout locks character movement.
         LookAround();
     }
 
