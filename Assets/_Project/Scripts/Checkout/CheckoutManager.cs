@@ -31,6 +31,8 @@ public class CheckoutManager : MonoBehaviour
     private CharacterController characterController;
     private Button exitUnityButton;
     private Camera playerCamera;
+    private Transform baggingPoint;
+    private int baggedProductCount;
 
     private readonly Dictionary<ProductItem, ScannedProduct> scannedProducts = new Dictionary<ProductItem, ScannedProduct>();
     private GameObject salesCanvas;
@@ -130,6 +132,11 @@ public class CheckoutManager : MonoBehaviour
         }
 
         // Scene objects are resolved by their agreed names.
+        if (baggingPoint == null)
+        {
+            GameObject point = GameObject.Find("BaggingPoint");
+            if (point != null) baggingPoint = point.transform;
+        }
         if (checkoutScreenPoint == null)
         {
             GameObject point = GameObject.Find("CheckoutUI_Point");
@@ -268,9 +275,65 @@ public class CheckoutManager : MonoBehaviour
 
         float price = Mathf.Max(0f, product.MarketPrice);
         scannedProducts.Add(product, new ScannedProduct { item = product, price = price });
+        MoveScannedProductToBaggingPoint(product);
         SetStatus("Scanned: " + product.ProductName);
         RefreshSalesUI();
+
+        // The front customer's sale is automatic as soon as their last item is scanned.
+        CustomerSystem customerSystem = CustomerSystem.Instance;
+        if (customerSystem != null && customerSystem.IsFrontCustomerProduct(product) &&
+            customerSystem.AreAllFrontCustomerProductsScanned(new List<ProductItem>(scannedProducts.Keys)))
+        {
+            CompleteSale();
+        }
         return true;
+    }
+
+
+    private void MoveScannedProductToBaggingPoint(ProductItem product)
+    {
+        if (product == null) return;
+
+        if (baggingPoint == null)
+        {
+            GameObject point = GameObject.Find("BaggingPoint");
+            if (point != null) baggingPoint = point.transform;
+        }
+
+        if (baggingPoint == null)
+        {
+            Debug.LogError("[CheckoutManager] BaggingPoint was not found. Create an Empty GameObject named BaggingPoint at the bagging area.");
+            SetStatus("BaggingPoint not found.");
+            return;
+        }
+
+        ShelfZone shelf = product.GetComponentInParent<ShelfZone>();
+        if (shelf != null)
+            shelf.UnregisterProduct(product.transform);
+
+        Transform itemTransform = product.transform;
+        itemTransform.SetParent(baggingPoint, true);
+        float sideOffset = (baggedProductCount % 8) * 0.22f;
+        int row = baggedProductCount / 8;
+        itemTransform.SetPositionAndRotation(
+            baggingPoint.position + baggingPoint.right * sideOffset + baggingPoint.forward * (row * 0.24f),
+            baggingPoint.rotation);
+
+        Rigidbody[] bodies = product.GetComponentsInChildren<Rigidbody>(true);
+        foreach (Rigidbody body in bodies)
+        {
+            if (body == null) continue;
+            body.isKinematic = true;
+            body.useGravity = false;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
+
+        Collider[] colliders = product.GetComponentsInChildren<Collider>(true);
+        foreach (Collider itemCollider in colliders)
+            if (itemCollider != null) itemCollider.enabled = false;
+
+        baggedProductCount++;
     }
 
     public void ClearScannedProducts()
@@ -329,10 +392,11 @@ public class CheckoutManager : MonoBehaviour
             ProductItem item = entry.item;
             if (item == null) continue;
 
-            ShelfZone zone = item.GetComponentInParent<ShelfZone>();
-            if (zone != null) zone.UnregisterProduct(item.transform);
-
-            Destroy(item.gameObject);
+            // Products have already been moved to BaggingPoint when scanned.
+            // Keep them visible there instead of destroying them at checkout.
+            Collider[] itemColliders = item.GetComponentsInChildren<Collider>(true);
+            foreach (Collider itemCollider in itemColliders)
+                if (itemCollider != null) itemCollider.enabled = false;
             soldCount++;
         }
 
