@@ -320,7 +320,7 @@ public class ComputerShopUI : MonoBehaviour
             TextAnchor.MiddleLeft, new Color(0.05f, 0.45f, 0.65f));
 
         contentArea = CreatePanel(pageRoot, "PageContent",
-            new Vector2(0.5f, 0.47f), Vector2.zero, new Vector2(panelSize.x * 0.93f, panelSize.y * 0.65f),
+            new Vector2(0.5f, 0.47f), Vector2.zero, new Vector2(panelSize.x * 0.93f, panelSize.y * 0.59f),
             new Color(0.78f, 0.89f, 1f, 1f)).rectTransform;
 
         statusLabel = CreateText(pageRoot, "", 22, FontStyle.Bold,
