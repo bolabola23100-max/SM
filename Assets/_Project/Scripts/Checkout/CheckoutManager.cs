@@ -93,6 +93,8 @@ public class CheckoutManager : MonoBehaviour
 
         if (playerCamera == null && playerMovement != null && playerMovement.playerCamera != null)
             playerCamera = playerMovement.playerCamera.GetComponent<Camera>();
+        if (playerCamera == null && productInteraction != null)
+            playerCamera = productInteraction.playerCamera;
         if (playerCamera == null) playerCamera = Camera.main;
     }
 
@@ -178,23 +180,27 @@ public class CheckoutManager : MonoBehaviour
         int count = Physics.RaycastNonAlloc(ray, scanHitBuffer, scanDistance,
             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
 
-        int nearest = -1;
-        float nearestDistance = float.MaxValue;
+        ProductItem product = null;
+        float nearestProductDistance = float.MaxValue;
+
+        // The ray can hit the counter, shelf, or a trigger before reaching the item.
+        // Select the nearest actual ProductItem instead of rejecting the whole ray
+        // because a non-product collider happened to be closer.
         for (int i = 0; i < count; i++)
         {
             Collider col = scanHitBuffer[i].collider;
             if (!col) continue;
             if (playerMovement != null && col.transform.root == playerMovement.transform.root) continue;
-            if (scanHitBuffer[i].distance < nearestDistance)
+
+            ProductItem candidate = col.GetComponentInParent<ProductItem>();
+            if (candidate == null || candidate.Data == null) continue;
+
+            if (scanHitBuffer[i].distance < nearestProductDistance)
             {
-                nearestDistance = scanHitBuffer[i].distance;
-                nearest = i;
+                nearestProductDistance = scanHitBuffer[i].distance;
+                product = candidate;
             }
         }
-
-        ProductItem product = nearest >= 0
-            ? scanHitBuffer[nearest].collider.GetComponentInParent<ProductItem>()
-            : null;
 
         for (int i = 0; i < count; i++) scanHitBuffer[i] = default;
 
