@@ -156,6 +156,14 @@ public class CustomerSystem : MonoBehaviour
         return front != null && front.IsWaitingAtScanner && front.ConveyorProducts.Contains(item);
     }
 
+    public void NotifyProductScanned(ProductItem product)
+    {
+        if (customers.Count == 0 || product == null) return;
+        CustomerAgent front = customers[0];
+        if (front != null && front.IsWaitingAtScanner && front.ConveyorProducts.Contains(product))
+            front.OnProductScanned(product);
+    }
+
     public bool AreAllFrontCustomerProductsScanned(ICollection<ProductItem> scannedItems)
     {
         if (customers.Count == 0 || scannedItems == null) return false;
