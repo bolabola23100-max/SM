@@ -11,10 +11,14 @@ public class CheckoutStation : MonoBehaviour
     private Camera playerCamera;
     private bool highlighted;
     private Renderer[] renderers;
-    private MaterialPropertyBlock block;
-    private readonly Dictionary<Renderer, Color> originalColors = new Dictionary<Renderer, Color>();
+    private readonly Dictionary<Renderer, MaterialPropertyBlock[]> originalBlocks =
+        new Dictionary<Renderer, MaterialPropertyBlock[]>();
 
-    void Awake() { renderers = GetComponentsInChildren<Renderer>(true); block = new MaterialPropertyBlock(); CacheColors(); }
+    void Awake()
+    {
+        renderers = GetComponentsInChildren<Renderer>(true);
+        CachePropertyBlocks();
+    }
     void Start() { ResolveReferences(); }
 
     void Update()
@@ -66,31 +70,61 @@ public class CheckoutStation : MonoBehaviour
         return checkoutManager.IsActive;
     }
 
-    void CacheColors()
+    void CachePropertyBlocks()
     {
         foreach (Renderer r in renderers)
         {
             if (!r) continue;
-            foreach (Material m in r.sharedMaterials)
+            int materialCount = r.sharedMaterials.Length;
+            MaterialPropertyBlock[] saved = new MaterialPropertyBlock[materialCount];
+
+            for (int i = 0; i < materialCount; i++)
             {
-                if (!m) continue;
-                if (m.HasProperty("_BaseColor")) { originalColors[r] = m.GetColor("_BaseColor"); break; }
-                if (m.HasProperty("_Color")) { originalColors[r] = m.GetColor("_Color"); break; }
+                saved[i] = new MaterialPropertyBlock();
+                r.GetPropertyBlock(saved[i], i);
             }
+
+            originalBlocks[r] = saved;
         }
     }
+
     void SetHighlight(bool state)
     {
         if (highlighted == state || renderers == null) return;
         highlighted = state;
+
         foreach (Renderer r in renderers)
         {
             if (!r) continue;
-            r.GetPropertyBlock(block);
-            Color c = state ? aimedColor : (originalColors.TryGetValue(r, out Color orig) ? orig : Color.white);
-            block.SetColor("_BaseColor", c); block.SetColor("_Color", c);
-            block.SetColor("_EmissionColor", state ? aimedColor * 1.2f : Color.black);
-            r.SetPropertyBlock(block);
+
+            Material[] materials = r.sharedMaterials;
+            if (!state)
+            {
+                if (originalBlocks.TryGetValue(r, out MaterialPropertyBlock[] saved))
+                {
+                    for (int i = 0; i < materials.Length; i++)
+                        r.SetPropertyBlock(i < saved.Length ? saved[i] : null, i);
+                }
+                continue;
+            }
+
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material material = materials[i];
+                if (!material) continue;
+
+                MaterialPropertyBlock block = new MaterialPropertyBlock();
+                r.GetPropertyBlock(block, i);
+
+                if (material.HasProperty("_BaseColor"))
+                    block.SetColor("_BaseColor", aimedColor);
+                if (material.HasProperty("_Color"))
+                    block.SetColor("_Color", aimedColor);
+                if (material.HasProperty("_EmissionColor"))
+                    block.SetColor("_EmissionColor", aimedColor * 1.2f);
+
+                r.SetPropertyBlock(block, i);
+            }
         }
     }
     void OnDisable() { SetHighlight(false); }
