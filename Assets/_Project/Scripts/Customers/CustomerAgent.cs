@@ -1,25 +1,24 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-/// <summary>
-/// Temporary capsule customer. It visits one stocked ShelfZone, carries one real
-/// ProductItem, waits in the checkout queue, then exits after the sale.
-/// </summary>
+/// <summary>Temporary customer that shops, places one real product at ScannerPoint, and waits for payment.</summary>
 public class CustomerAgent : MonoBehaviour
 {
-    private enum State { GoingToShelf, GoingToQueue, Waiting, Leaving }
+    private enum State { GoingToShelf, GoingToQueue, WaitingInQueue, GoingToConveyor, WaitingAtScanner, Leaving }
 
     private State state;
     private CustomerSystem owner;
     private NavMeshAgent navAgent;
     private Transform carryPoint;
-    private Transform destination;
     private ProductItem carriedProduct;
     private float moveSpeed = 1.35f;
     private float arriveDistance = 0.35f;
     private Vector3 directTarget;
+    private ShelfZone currentShelf;
 
-    public bool IsWaiting => state == State.Waiting;
+    public bool IsWaitingAtScanner => state == State.WaitingAtScanner;
+    public bool IsWaitingInQueue => state == State.WaitingInQueue;
+    public ProductItem ConveyorProduct { get; private set; }
 
     public void Initialize(CustomerSystem system, Vector3 spawnPosition, Color outfitColor)
     {
@@ -55,21 +54,16 @@ public class CustomerAgent : MonoBehaviour
             navAgent.enabled = true;
             navAgent.Warp(hit.position);
         }
-        else
-        {
-            navAgent.enabled = false;
-        }
+        else navAgent.enabled = false;
 
         ShelfZone firstShelf = owner.GetRandomStockedShelf();
-        if (firstShelf != null)
-            GoToShelf(firstShelf);
-        else
-            GoToQueue();
+        if (firstShelf != null) GoToShelf(firstShelf);
+        else GoToQueue();
     }
 
     private void Update()
     {
-        if (state == State.Waiting) return;
+        if (state == State.WaitingInQueue || state == State.WaitingAtScanner) return;
 
         if (HasReachedDestination())
         {
@@ -80,8 +74,14 @@ public class CustomerAgent : MonoBehaviour
             }
             else if (state == State.GoingToQueue)
             {
-                state = State.Waiting;
+                state = State.WaitingInQueue;
                 owner.NotifyCustomerWaiting(this);
+            }
+            else if (state == State.GoingToConveyor)
+            {
+                PlaceProductOnConveyor();
+                state = State.WaitingAtScanner;
+                owner.NotifyCustomerAtScanner(this);
             }
             else if (state == State.Leaving)
             {
@@ -91,7 +91,7 @@ public class CustomerAgent : MonoBehaviour
             return;
         }
 
-        if (!navAgent || !navAgent.enabled || !navAgent.isOnNavMesh)
+        if (navAgent == null || !navAgent.enabled || !navAgent.isOnNavMesh)
         {
             Vector3 flatTarget = new Vector3(directTarget.x, transform.position.y, directTarget.z);
             Vector3 direction = flatTarget - transform.position;
@@ -118,19 +118,22 @@ public class CustomerAgent : MonoBehaviour
     {
         directTarget = position;
         if (navAgent != null && navAgent.enabled && navAgent.isOnNavMesh)
-            navAgent.SetDestination(position);
+        {
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(position, out hit, 2f, NavMesh.AllAreas))
+                navAgent.SetDestination(hit.position);
+            else
+                Debug.LogWarning("[CustomerAgent] Destination is not close to the baked NavMesh: " + position);
+        }
     }
 
     private void GoToShelf(ShelfZone shelf)
     {
+        currentShelf = shelf;
         state = State.GoingToShelf;
         Vector3 target = shelf.transform.position + shelf.transform.forward * 0.65f;
-        target.y = transform.position.y;
         SetDestination(target);
-        currentShelf = shelf;
     }
-
-    private ShelfZone currentShelf;
 
     private void TryTakeOneProduct()
     {
@@ -154,7 +157,10 @@ public class CustomerAgent : MonoBehaviour
                 body.angularVelocity = Vector3.zero;
             }
 
-            item.transform.SetParent(carryPoint, true);
+            Collider[] colliders = item.GetComponentsInChildren<Collider>();
+            foreach (Collider itemCollider in colliders) itemCollider.enabled = false;
+
+            item.transform.SetParent(carryPoint, false);
             item.transform.localPosition = Vector3.zero;
             item.transform.localRotation = Quaternion.identity;
             return;
@@ -169,18 +175,52 @@ public class CustomerAgent : MonoBehaviour
 
     public void MoveForwardInQueue(Vector3 position)
     {
-        if (state == State.Leaving) return;
+        if (state == State.Leaving || state == State.WaitingAtScanner) return;
         state = State.GoingToQueue;
         SetDestination(position);
+    }
+
+    public void GoToConveyor(Transform point)
+    {
+        if (point == null || state == State.Leaving || state == State.WaitingAtScanner) return;
+        state = State.GoingToConveyor;
+        SetDestination(point.position);
+    }
+
+    private void PlaceProductOnConveyor()
+    {
+        if (carriedProduct == null || owner.ScannerPoint == null)
+        {
+            Debug.LogWarning("[CustomerAgent] Customer reached ScannerPoint without a product or scanner point.");
+            return;
+        }
+
+        Transform itemTransform = carriedProduct.transform;
+        itemTransform.SetParent(null, true);
+        itemTransform.SetPositionAndRotation(owner.ScannerPoint.position, owner.ScannerPoint.rotation);
+
+        Collider[] colliders = carriedProduct.GetComponentsInChildren<Collider>();
+        foreach (Collider itemCollider in colliders) itemCollider.enabled = true;
+
+        Rigidbody body = carriedProduct.GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.useGravity = false;
+            body.isKinematic = true;
+        }
+
+        ConveyorProduct = carriedProduct;
+        carriedProduct = null;
+        Debug.Log("[CustomerAgent] Customer placed product at ScannerPoint.");
     }
 
     public void LeaveAfterPayment()
     {
         if (state == State.Leaving) return;
         state = State.Leaving;
-        if (carriedProduct != null && carriedProduct.transform != null)
-            carriedProduct = null; // CheckoutManager destroys scanned products after payment.
-
+        ConveyorProduct = null;
         SetDestination(owner.GetExitPosition());
     }
 }
