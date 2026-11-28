@@ -1,10 +1,13 @@
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Procedural carton whose footprint and height are fitted to the product prefab
-/// and the actual pack count (not the shelf's layer setting).
+/// Procedural carton fitted to the product prefab and its pack size.
+/// - The count is never reset by a rebuild (capacity vs remainingCount).
+/// - Static carton geometry is merged into ONE mesh (cached and shared between cartons).
+/// - Materials and meshes are shared; nothing is allocated per carton except a few GameObjects.
+/// - Products inside are pre-built "slots" that are only toggled on/off (no Instantiate/Destroy on take/give back).
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Rigidbody), typeof(BoxCollider))]
@@ -16,22 +19,35 @@ public class ProductBox : MonoBehaviour
     [Min(1)][SerializeField] private int customCount = 12;
 
     [Header("Carton layout")]
-    [Min(1)][SerializeField] private int columns = 3;
-    [Min(1)][SerializeField] private int rows = 2;
-    [Min(0.001f)][SerializeField] private float productSpacing = 0.015f;
-    [Min(0.005f)][SerializeField] private float productFootprint = 0.18f;
-    [Min(0.005f)][SerializeField] private float productHeight = 0.22f;
+    [Min(0.001f)][SerializeField] private float productSpacing = 0.01f;
     [Min(0.005f)][SerializeField] private float wallThickness = 0.018f;
-    [Min(0f)][SerializeField] private float padding = 0.035f;
+    [Min(0f)][SerializeField] private float padding = 0.02f;
     [Min(0.05f)][SerializeField] private float maxCartonWidth = 0.70f;
+    [Tooltip("Used only if the product prefab has no MeshFilter/MeshRenderer.")]
+    [Min(0.005f)][SerializeField] private float productFootprint = 0.18f;
+    [Tooltip("Used only if the product prefab has no MeshFilter/MeshRenderer.")]
+    [Min(0.005f)][SerializeField] private float productHeight = 0.22f;
+
+    [Header("Flaps")]
     [Min(0.01f)][SerializeField] private float flapOpenDuration = 0.22f;
+    [Range(60f, 170f)][SerializeField] private float flapOpenAngle = 125f;
+
+    [Header("Physics")]
+    [Min(0f)][SerializeField] private float cartonMass = 0.15f;
+    [Min(0f)][SerializeField] private float unitMass = 0.05f;
+
+    [Header("Rendering")]
+    [Tooltip("Assign a Lit shader (e.g. URP/Lit) so it is included in mobile builds. Shader.Find is only a fallback.")]
+    [SerializeField] private Shader cartonShader;
+    [Tooltip("Assign an Unlit shader (e.g. URP/Unlit) for the logo on the flaps.")]
+    [SerializeField] private Shader logoShader;
+    [SerializeField] private bool showProductModelsBeforeOpening = false;
+    [SerializeField] private bool buildOnAwake = true;
 
     [Header("Appearance")]
     [SerializeField] private Color cartonColor = new Color(0.62f, 0.40f, 0.22f);
     [SerializeField] private Color cartonFrameColor = new Color(0.30f, 0.16f, 0.08f);
     [Min(0.005f)][SerializeField] private float frameWidth = 0.025f;
-    [SerializeField] private bool showProductModelsBeforeOpening = false;
-    [SerializeField] private bool buildOnAwake = true;
 
     [Header("Carton Details")]
     [SerializeField] private Color creaseColor = new Color(0.48f, 0.30f, 0.16f);
@@ -42,39 +58,93 @@ public class ProductBox : MonoBehaviour
     [Header("Carton Tape")]
     [SerializeField] private Color tapeColor = new Color(0.94f, 0.94f, 0.90f);
     [Min(0.005f)][SerializeField] private float tapeWidth = 0.055f;
-    [Min(0.001f)][SerializeField] private float tapeThickness = 0.003f;
+    [Min(0.002f)][SerializeField] private float tapeThickness = 0.003f;
 
     [Header("Runtime state")]
     [SerializeField] private bool isOpen;
 
-    private readonly List<GameObject> productDisplays = new List<GameObject>();
+    // ------------------------------------------------------------------ events
+    public event System.Action<ProductBox> Opened;
+    public event System.Action<ProductBox> Emptied;
+    public event System.Action<ProductBox, int> CountChanged;
+
+    // ------------------------------------------------------------------ runtime state
+    private int remainingCount;
+    private int capacity;
+    private bool countInitialized;
+    private bool tapeCut;
+    private bool displaysBuilt;
+
+    private Vector3 cartonSize;
+    private CartonLayout layout;
+    private ProductVisual productVisual;
+
     private Transform visualRoot;
     private Transform leftFlap;
     private Transform rightFlap;
-    private Material cartonMaterial;
-    private Material cartonFrameMaterial;
-    private Material tapeMaterial;
-    private Material detailMaterial;
-    private Material labelMaterial;
-    private int remainingCount;
-    private Vector3 cartonSize;
-    private float fittedProductWidth;
-    private float fittedProductDepth;
-    private Vector3 fittedProductCenterOffset;
-    private bool displaysBuilt;
+    private GameObject tapeObject;
+    private readonly List<GameObject> slots = new List<GameObject>();
     private Coroutine flapAnimation;
 
-    private struct ProductDimensions
-    {
-        public float width, depth, height;
-        public Vector3 centerOffset;
-    }
-    private static readonly Dictionary<EntityId, ProductDimensions> dimensionsCache = new Dictionary<EntityId, ProductDimensions>();
-    private struct CartonLayout { public int columns, rows, layers; public float innerX, innerZ, innerY; public Vector3 size; }
-    private static readonly Dictionary<string, CartonLayout> layoutCache = new Dictionary<string, CartonLayout>();
+    // ------------------------------------------------------------------ shared caches (static)
+    private const float LogoLift = 0.0015f;
+    private const int SlotCarton = 0, SlotFrame = 1, SlotDetail = 2, SlotLabel = 3;
 
+    private struct CartonLayout
+    {
+        public int columns, rows, layers;
+        public float innerX, innerZ;
+        public Vector3 size;
+    }
+
+    private sealed class ProductPart
+    {
+        public Mesh mesh;
+        public Material[] materials;
+        public Vector3 position;
+        public Quaternion rotation;
+        public Vector3 scale;
+    }
+
+    private sealed class ProductVisual
+    {
+        public readonly List<ProductPart> parts = new List<ProductPart>();
+        public float width, depth, height;
+        public Vector3 center;
+    }
+
+    private sealed class VisualSet
+    {
+        public Mesh body;
+        public int[] slotIds;
+        public bool hasSprite;
+        public Sprite sprite;
+        public Vector3 frontImagePos;
+        public float frontImageScale;
+        public Mesh logoLeft, logoRight;
+        public float logoCenterX;
+    }
+
+    private static readonly Dictionary<(EntityId, Vector3), ProductVisual> productCache = new Dictionary<(EntityId, Vector3), ProductVisual>();
+    private static readonly Dictionary<string, CartonLayout> layoutCache = new Dictionary<string, CartonLayout>();
+    private static readonly Dictionary<string, VisualSet> visualCache = new Dictionary<string, VisualSet>();
+    private static readonly Dictionary<string, Material> materialCache = new Dictionary<string, Material>();
+    private static Mesh cubeMesh;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStatics()
+    {
+        productCache.Clear();
+        layoutCache.Clear();
+        visualCache.Clear();
+        materialCache.Clear();
+        cubeMesh = null;
+    }
+
+    // ------------------------------------------------------------------ public API
     public ProductData Data => productData;
     public int RemainingCount => remainingCount;
+    public int Capacity => capacity;
     public bool IsOpen => isOpen;
     public bool IsEmpty => remainingCount <= 0;
     public string ProductName => productData != null ? productData.productName : string.Empty;
@@ -90,507 +160,32 @@ public class ProductBox : MonoBehaviour
         if (amount > 0) { useProductPackSize = false; customCount = amount; }
         else useProductPackSize = true;
 
-        remainingCount = data != null
-            ? (useProductPackSize ? Mathf.Max(1, data.packSize) : Mathf.Max(1, customCount))
-            : 0;
+        countInitialized = false;
+        remainingCount = data != null ? ComputeCapacity() : 0;
         if (Application.isPlaying) BuildCarton();
     }
 
-    public void BuildCarton()
+    /// <summary>Sets how many products are left (e.g. when loading a save).</summary>
+    public void SetRemainingCount(int count)
     {
-        ClearGeneratedVisuals();
-        if (productData == null || productData.productPrefab == null)
-        {
-            Debug.LogWarning($"ProductBox on '{name}' needs a ProductData with Product Prefab assigned.", this);
-            remainingCount = 0;
-            return;
-        }
-
-        remainingCount = useProductPackSize ? Mathf.Max(1, productData.packSize) : Mathf.Max(1, customCount);
-        MeasureProductDimensions();
-
-        productSpacing = Mathf.Clamp(productSpacing, 0.004f, 0.012f);
-        padding = Mathf.Clamp(padding, 0.012f, 0.025f);
-        string key = productData.productPrefab.GetEntityId().ToString() + ":" + remainingCount;
-        CartonLayout layout;
-        if (!layoutCache.TryGetValue(key, out layout))
-        {
-            layout = FindBestLayout(remainingCount);
-            layoutCache[key] = layout;
-        }
-        columns = layout.columns; rows = layout.rows;
-        int perLayer = columns * rows, layers = layout.layers;
-        float innerX = layout.innerX, innerZ = layout.innerZ, innerY = layout.innerY;
-        cartonSize = layout.size;
-
-        visualRoot = new GameObject("CartonVisuals").transform;
-        visualRoot.SetParent(transform, false);
-        Shader cartonShader = Shader.Find("Universal Render Pipeline/Lit");
-        if (cartonShader == null) cartonShader = Shader.Find("Standard");
-        if (cartonShader == null)
-        {
-            Debug.LogError("ProductBox: no compatible carton shader was found.", this);
-            return;
-        }
-        cartonMaterial = new Material(cartonShader);
-        cartonMaterial.color = cartonColor;
-        cartonFrameMaterial = new Material(cartonMaterial);
-        cartonFrameMaterial.color = cartonFrameColor;
-        tapeMaterial = new Material(cartonMaterial);
-        tapeMaterial.color = tapeColor;
-        detailMaterial = new Material(cartonMaterial);
-        detailMaterial.color = creaseColor;
-        labelMaterial = new Material(cartonMaterial);
-        labelMaterial.color = labelColor;
-
-        float halfX = cartonSize.x * 0.5f, halfY = cartonSize.y * 0.5f, halfZ = cartonSize.z * 0.5f;
-        float t = wallThickness;
-        AddPanel("Bottom", new Vector3(cartonSize.x, t, cartonSize.z), new Vector3(0f, -halfY + t * 0.5f, 0f));
-        AddPanel("Front", new Vector3(cartonSize.x, cartonSize.y, t), new Vector3(0f, 0f, halfZ - t * 0.5f));
-        AddPanel("Back", new Vector3(cartonSize.x, cartonSize.y, t), new Vector3(0f, 0f, -halfZ + t * 0.5f));
-        AddPanel("Left", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t), new Vector3(-halfX + t * 0.5f, 0f, 0f));
-        AddPanel("Right", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t), new Vector3(halfX - t * 0.5f, 0f, 0f));
-        leftFlap = CreateFlap("LeftFlap", -halfX, halfY, cartonSize.x * 0.5f, t, 1f);
-        rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t, -1f);
-
-        // Dark, slightly raised cardboard border strips around the four outer walls.
-        AddWallFrame(halfX, halfY, halfZ, t);
-        AddCartonTape(halfX, halfY, halfZ);
-        AddCartonDetails(halfX, halfY, halfZ);
-        AddProductImageAcrossFlaps(halfY, t);
-        AddProductImageOnFront(halfZ, t);
-
-        BoxCollider boxCollider = GetComponent<BoxCollider>();
-        boxCollider.center = Vector3.zero;
-        boxCollider.size = cartonSize;
-        Rigidbody body = GetComponent<Rigidbody>();
-        body.mass = Mathf.Max(0.2f, cartonSize.x * cartonSize.y * cartonSize.z * 2f);
-        body.interpolation = RigidbodyInterpolation.Interpolate;
-
-        displaysBuilt = false;
-        if (showProductModelsBeforeOpening || isOpen)
-        {
-            BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
-            displaysBuilt = true;
-        }
-    }
-
-    private CartonLayout FindBestLayout(int count)
-    {
-        CartonLayout best = new CartonLayout();
-        float bestScore = float.MaxValue;
-        for (int layerCount = 1; layerCount <= count; layerCount++)
-        {
-            int unitsPerLayer = Mathf.CeilToInt((float)count / layerCount);
-            for (int rowCount = 1; rowCount <= unitsPerLayer; rowCount++)
-            {
-                int colCount = Mathf.CeilToInt((float)unitsPerLayer / rowCount);
-                float ix = colCount * fittedProductWidth + (colCount - 1) * productSpacing;
-                float iz = rowCount * fittedProductDepth + (rowCount - 1) * productSpacing;
-                float x = ix + 2f * (padding + wallThickness), z = iz + 2f * (padding + wallThickness);
-                if (x > maxCartonWidth) continue;
-                float y = layerCount * productHeight + 2f * padding + wallThickness;
-                float volume = x * z * y;
-                float ratio = Mathf.Max(x, z, y) / Mathf.Max(0.001f, Mathf.Min(x, z, y));
-                float score = volume * (1f + Mathf.Max(0f, ratio - 1.4f) * 0.45f);
-                if (score < bestScore)
-                {
-                    bestScore = score;
-                    best.columns = colCount; best.rows = rowCount; best.layers = layerCount;
-                    best.innerX = ix; best.innerZ = iz; best.innerY = layerCount * productHeight;
-                    best.size = new Vector3(x, y, z);
-                }
-            }
-        }
-        if (bestScore == float.MaxValue)
-        {
-            best.columns = 1; best.rows = 1; best.layers = count;
-            best.innerX = fittedProductWidth; best.innerZ = fittedProductDepth;
-            best.innerY = count * productHeight;
-            best.size = new Vector3(fittedProductWidth + 2f * (padding + wallThickness),
-                best.innerY + 2f * padding + wallThickness, fittedProductDepth + 2f * (padding + wallThickness));
-        }
-        return best;
-    }
-
-    private void AnimateFlaps(bool open)
-    {
-        if (flapAnimation != null) StopCoroutine(flapAnimation);
-        flapAnimation = StartCoroutine(FlapTween(open));
-    }
-
-    private IEnumerator FlapTween(bool open)
-    {
-        Quaternion ls = leftFlap != null ? leftFlap.localRotation : Quaternion.identity;
-        Quaternion rs = rightFlap != null ? rightFlap.localRotation : Quaternion.identity;
-        Quaternion le = open ? Quaternion.Euler(0f, 0f, 125f) : Quaternion.identity;
-        Quaternion re = open ? Quaternion.Euler(0f, 0f, -125f) : Quaternion.identity;
-        float elapsed = 0f, duration = Mathf.Max(0.01f, flapOpenDuration);
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
-            if (leftFlap != null) leftFlap.localRotation = Quaternion.Slerp(ls, le, t);
-            if (rightFlap != null) rightFlap.localRotation = Quaternion.Slerp(rs, re, t);
-            yield return null;
-        }
-        if (leftFlap != null) leftFlap.localRotation = le;
-        if (rightFlap != null) rightFlap.localRotation = re;
-        flapAnimation = null;
-    }
-
-    private void MeasureProductDimensions()
-    {
-        GameObject prefab = productData.productPrefab;
-        EntityId cacheKey = prefab.GetEntityId();
-        if (dimensionsCache.TryGetValue(cacheKey, out ProductDimensions cached))
-        {
-            fittedProductWidth = cached.width; fittedProductDepth = cached.depth;
-            productHeight = cached.height; fittedProductCenterOffset = cached.centerOffset;
-            return;
-        }
-
-        GameObject sample = Instantiate(prefab);
-        sample.hideFlags = HideFlags.HideAndDontSave;
-        sample.transform.position = Vector3.zero;
-        sample.transform.rotation = Quaternion.Euler(productData.rotation);
-        Renderer[] renderers = sample.GetComponentsInChildren<Renderer>(true);
-        Bounds bounds = new Bounds(Vector3.zero, Vector3.zero);
-        bool hasBounds = false;
-        foreach (Renderer itemRenderer in renderers)
-        {
-            if (itemRenderer == null) continue;
-            if (!hasBounds) { bounds = itemRenderer.bounds; hasBounds = true; }
-            else bounds.Encapsulate(itemRenderer.bounds);
-        }
-
-        ProductDimensions dimensions;
-        if (hasBounds)
-        {
-            dimensions.width = Mathf.Max(0.01f, bounds.size.x);
-            dimensions.depth = Mathf.Max(0.01f, bounds.size.z);
-            dimensions.height = Mathf.Max(0.01f, bounds.size.y);
-            dimensions.centerOffset = sample.transform.InverseTransformPoint(bounds.center);
-        }
-        else
-        {
-            dimensions.width = productFootprint; dimensions.depth = productFootprint;
-            dimensions.height = Mathf.Max(0.01f, productHeight); dimensions.centerOffset = Vector3.zero;
-            Debug.LogWarning("Product prefab has no Renderer; using fallback carton dimensions.", productData);
-        }
-        dimensionsCache[cacheKey] = dimensions;
-        fittedProductWidth = dimensions.width; fittedProductDepth = dimensions.depth;
-        productHeight = dimensions.height; fittedProductCenterOffset = dimensions.centerOffset;
-        if (Application.isPlaying) Destroy(sample); else DestroyImmediate(sample);
-    }
-
-    private void BuildProductDisplays(int cols, int rowCount, int layers, float innerX, float innerZ, float innerY, int perLayer)
-    {
-        for (int i = 0; i < remainingCount; i++)
-        {
-            GameObject display = Instantiate(productData.productPrefab, visualRoot);
-            display.name = $"Inside_{productData.productName}_{i + 1}";
-            DisableDisplayPhysicsAndScripts(display);
-            int layer = i / perLayer, indexInLayer = i % perLayer;
-            int col = indexInLayer % cols, row = indexInLayer / cols;
-            Vector3 visualCenter = new Vector3(
-                -innerX * 0.5f + fittedProductWidth * 0.5f + col * (fittedProductWidth + productSpacing),
-                -cartonSize.y * 0.5f + wallThickness + padding + productHeight * (layer + 0.5f),
-                -innerZ * 0.5f + fittedProductDepth * 0.5f + row * (fittedProductDepth + productSpacing));
-
-            display.transform.localPosition = Vector3.zero;
-            display.transform.localRotation = Quaternion.Euler(productData.rotation);
-            display.transform.localScale = productData.productPrefab.transform.localScale;
-
-            // Align using the actual instantiated renderers' bounds, not the prefab pivot.
-            Renderer[] renderers = display.GetComponentsInChildren<Renderer>(true);
-            Bounds bounds = new Bounds();
-            bool hasBounds = false;
-            foreach (Renderer itemRenderer in renderers)
-            {
-                if (itemRenderer == null) continue;
-                if (!hasBounds) { bounds = itemRenderer.bounds; hasBounds = true; }
-                else bounds.Encapsulate(itemRenderer.bounds);
-            }
-            if (hasBounds)
-            {
-                Vector3 centerInCartonSpace = visualRoot.InverseTransformPoint(bounds.center);
-                display.transform.localPosition += visualCenter - centerInCartonSpace;
-            }
-            else
-            {
-                display.transform.localPosition = visualCenter;
-            }
-
-            display.SetActive(showProductModelsBeforeOpening || isOpen);
-            productDisplays.Add(display);
-        }
-    }
-
-    private Transform CreateFlap(string flapName, float hingeX, float topY, float flapWidth, float thickness, float direction)
-    {
-        Transform pivot = new GameObject(flapName).transform;
-        pivot.SetParent(visualRoot, false);
-        pivot.localPosition = new Vector3(hingeX, topY, 0f);
-        GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        panel.name = "CardboardPanel";
-        panel.transform.SetParent(pivot, false);
-        panel.transform.localPosition = new Vector3(direction * flapWidth * 0.5f, 0f, 0f);
-        panel.transform.localScale = new Vector3(flapWidth, thickness, cartonSize.z);
-        ApplyCartonMaterial(panel);
-        return pivot;
-    }
-
-    private void AddPanel(string panelName, Vector3 size, Vector3 localPosition)
-    {
-        GameObject panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        panel.name = panelName; panel.transform.SetParent(visualRoot, false);
-        panel.transform.localPosition = localPosition; panel.transform.localScale = size;
-        ApplyCartonMaterial(panel);
-    }
-
-    private void AddWallFrame(float halfX, float halfY, float halfZ, float wallT)
-    {
-        float w = Mathf.Min(frameWidth, cartonSize.x * 0.08f);
-        float yBottom = -halfY + w * 0.5f;
-        float yTop = halfY - w * 0.5f;
-        float zFront = halfZ + w * 0.15f;
-        float zBack = -halfZ - w * 0.15f;
-        float xLeft = -halfX - w * 0.15f;
-        float xRight = halfX + w * 0.15f;
-
-        // Front and back face frames: horizontal top/bottom and vertical sides.
-        foreach (float z in new float[] { zFront, zBack })
-        {
-            CreateTrimBar(new Vector3(cartonSize.x, w, w), new Vector3(0f, yTop, z));
-            CreateTrimBar(new Vector3(cartonSize.x, w, w), new Vector3(0f, yBottom, z));
-            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(xLeft, 0f, z));
-            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(xRight, 0f, z));
-        }
-        // Side face frames, with top and bottom strips and front/back vertical edges.
-        foreach (float x in new float[] { xLeft, xRight })
-        {
-            CreateTrimBar(new Vector3(w, w, cartonSize.z), new Vector3(x, yTop, 0f));
-            CreateTrimBar(new Vector3(w, w, cartonSize.z), new Vector3(x, yBottom, 0f));
-            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(x, 0f, zFront));
-            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(x, 0f, zBack));
-        }
-    }
-
-    private void AddCartonTape(float halfX, float halfY, float halfZ)
-    {
-        float tapeW = Mathf.Min(tapeWidth, cartonSize.x * 0.35f);
-        // A single strip is placed only on the upper surface; it does not wrap down the sides.
-        CreateTapeSegment(new Vector3(tapeW, tapeThickness, cartonSize.z * 0.92f),
-            new Vector3(0f, halfY + tapeThickness * 0.5f, 0f));
-    }
-
-    private void CreateTapeSegment(Vector3 size, Vector3 localPosition)
-    {
-        GameObject tape = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        tape.name = "WhiteCartonTape";
-        tape.transform.SetParent(visualRoot, false);
-        tape.transform.localPosition = localPosition;
-        tape.transform.localScale = size;
-        Collider col = tape.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-        Renderer rend = tape.GetComponent<Renderer>();
-        if (rend != null && tapeMaterial != null) rend.sharedMaterial = tapeMaterial;
-    }
-
-    private void AddCartonDetails(float halfX, float halfY, float halfZ)
-    {
-        // Subtle folded-panel seam lines on the front and rear faces.
-        float seam = Mathf.Max(0.001f, creaseThickness);
-        float faceOffset = wallThickness * 0.5f + seam * 0.5f;
-        CreateDetailBar(new Vector3(cartonSize.x * 0.72f, seam, seam),
-            new Vector3(0f, halfY * 0.35f, halfZ + faceOffset));
-        CreateDetailBar(new Vector3(cartonSize.x * 0.72f, seam, seam),
-            new Vector3(0f, halfY * 0.35f, -halfZ - faceOffset));
-
-        // A restrained shipping-label patch on the front face.
-        if (showShippingLabel)
-        {
-            float labelW = Mathf.Min(cartonSize.x * 0.32f, 0.16f);
-            float labelH = Mathf.Min(cartonSize.y * 0.22f, 0.10f);
-            CreateLabelPatch(new Vector3(labelW, labelH, seam * 2f),
-                new Vector3(halfX * 0.42f, halfY * 0.28f, halfZ + wallThickness * 0.5f + seam));
-        }
-    }
-
-    private void AddProductImageOnFront(float halfZ, float thickness)
-    {
-        if (productData == null || productData.productIcon == null) return;
-
-        Sprite sprite = productData.productIcon;
-        Vector2 spriteSize = sprite.bounds.size;
-        if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
-
-        float maxWidth = cartonSize.x * 0.20f;
-        float maxHeight = cartonSize.y * 0.22f;
-        float scale = Mathf.Min(maxWidth / spriteSize.x, maxHeight / spriteSize.y);
-        float imageWidth = spriteSize.x * scale;
-        float imageHeight = spriteSize.y * scale;
-        float framePadding = Mathf.Max(0.008f, frameWidth * 0.55f);
-        float frameThickness = Mathf.Max(0.006f, frameWidth * 0.35f);
-        Vector3 center = new Vector3(0f, -cartonSize.y * 0.08f,
-            halfZ + thickness * 0.5f + frameThickness * 0.5f + 0.003f);
-
-        // Four dark-brown bars form a compact frame around the product picture.
-        CreateTrimBar(new Vector3(imageWidth + framePadding * 2f, frameThickness, frameThickness),
-            center + new Vector3(0f, imageHeight * 0.5f + framePadding, 0f));
-        CreateTrimBar(new Vector3(imageWidth + framePadding * 2f, frameThickness, frameThickness),
-            center + new Vector3(0f, -imageHeight * 0.5f - framePadding, 0f));
-        CreateTrimBar(new Vector3(frameThickness, imageHeight + framePadding * 2f, frameThickness),
-            center + new Vector3(-imageWidth * 0.5f - framePadding, 0f, 0f));
-        CreateTrimBar(new Vector3(frameThickness, imageHeight + framePadding * 2f, frameThickness),
-            center + new Vector3(imageWidth * 0.5f + framePadding, 0f, 0f));
-
-        GameObject imageObject = new GameObject("SmallProductImageInFrame");
-        imageObject.transform.SetParent(visualRoot, false);
-        imageObject.transform.localPosition = center + new Vector3(0f, 0f, frameThickness * 0.5f + 0.002f);
-        imageObject.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-        imageObject.transform.localScale = Vector3.one * scale;
-
-        SpriteRenderer imageRenderer = imageObject.AddComponent<SpriteRenderer>();
-        imageRenderer.sprite = sprite;
-        imageRenderer.color = Color.white;
-        imageRenderer.sortingOrder = 5;
-    }
-
-    private void AddProductImageAcrossFlaps(float halfY, float flapThickness)
-    {
-        if (productData == null || productData.productIcon == null || leftFlap == null || rightFlap == null) return;
-        Sprite sprite = productData.productIcon;
-        float maxWidth = cartonSize.x * 0.82f;
-        float maxDepth = cartonSize.z * 0.70f;
-        Vector2 spriteSize = sprite.bounds.size;
-        if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
-        float scale = Mathf.Min(maxWidth / spriteSize.x, maxDepth / spriteSize.y);
-        float imageW = spriteSize.x * scale;
-        float imageD = spriteSize.y * scale;
-        float flapW = cartonSize.x * 0.5f;
-        float imageHalfW = imageW * 0.5f;
-
-        // Each image half is attached to its own flap, so it follows the flap animation.
-        CreateFlapImageHalf(leftFlap, sprite, true, imageHalfW, imageD, flapW, scale, flapThickness);
-        CreateFlapImageHalf(rightFlap, sprite, false, imageHalfW, imageD, flapW, scale, flapThickness);
-    }
-
-    private void CreateFlapImageHalf(Transform flap, Sprite sprite, bool leftHalf, float halfImageWidth,
-        float imageDepth, float flapWidth, float scale, float flapThickness)
-    {
-        GameObject image = new GameObject(leftHalf ? "CartonLogoLeftHalf" : "CartonLogoRightHalf");
-        image.transform.SetParent(flap, false);
-        // The flaps pivot on opposite outer edges and extend inward; place the sliced image accordingly.
-        float direction = leftHalf ? 1f : -1f;
-        float imageCenterX = direction * (flapWidth - halfImageWidth);
-        image.transform.localPosition = new Vector3(imageCenterX, flapThickness * 0.5f + 0.002f, 0f);
-        image.transform.localRotation = Quaternion.identity;
-
-        Mesh mesh = new Mesh();
-        mesh.name = "CartonLogoHalfMesh";
-        float left = -halfImageWidth, right = halfImageWidth;
-        float bottom = -imageDepth * 0.5f, top = imageDepth * 0.5f;
-        mesh.vertices = new Vector3[] {
-            new Vector3(left, 0f, bottom), new Vector3(right, 0f, bottom),
-            new Vector3(right, 0f, top), new Vector3(left, 0f, top)
-        };
-        Rect rect = sprite.textureRect;
-        float u0 = rect.x / sprite.texture.width, u1 = rect.xMax / sprite.texture.width;
-        float v0 = rect.y / sprite.texture.height, v1 = rect.yMax / sprite.texture.height;
-        float umid = (u0 + u1) * 0.5f;
-        mesh.uv = leftHalf
-            ? new Vector2[] { new Vector2(u0,v0), new Vector2(umid,v0), new Vector2(umid,v1), new Vector2(u0,v1) }
-            : new Vector2[] { new Vector2(umid,v0), new Vector2(u1,v0), new Vector2(u1,v1), new Vector2(umid,v1) };
-        mesh.triangles = new int[] { 0,2,1, 0,3,2 };
-        mesh.RecalculateNormals();
-
-        MeshFilter mf = image.AddComponent<MeshFilter>();
-        mf.sharedMesh = mesh;
-        MeshRenderer mr = image.AddComponent<MeshRenderer>();
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null) shader = Shader.Find("Unlit/Texture");
-        if (shader != null)
-        {
-            Material mat = new Material(shader);
-            mat.mainTexture = sprite.texture;
-            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", sprite.texture);
-            mr.sharedMaterial = mat;
-        }
-    }
-
-    private void CreateDetailBar(Vector3 size, Vector3 localPosition)
-    {
-        GameObject detail = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        detail.name = "CartonFoldSeam";
-        detail.transform.SetParent(visualRoot, false);
-        detail.transform.localPosition = localPosition;
-        detail.transform.localScale = size;
-        Collider col = detail.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-        Renderer rend = detail.GetComponent<Renderer>();
-        if (rend != null && detailMaterial != null) rend.sharedMaterial = detailMaterial;
-    }
-
-    private void CreateLabelPatch(Vector3 size, Vector3 localPosition)
-    {
-        GameObject label = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        label.name = "ShippingLabel";
-        label.transform.SetParent(visualRoot, false);
-        label.transform.localPosition = localPosition;
-        label.transform.localScale = size;
-        Collider col = label.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-        Renderer rend = label.GetComponent<Renderer>();
-        if (rend != null && labelMaterial != null) rend.sharedMaterial = labelMaterial;
-    }
-
-    private void CreateTrimBar(Vector3 size, Vector3 localPosition)
-    {
-        GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        bar.name = "DarkCartonFrame";
-        bar.transform.SetParent(visualRoot, false);
-        bar.transform.localPosition = localPosition;
-        bar.transform.localScale = size;
-        Collider col = bar.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-        Renderer rend = bar.GetComponent<Renderer>();
-        if (rend != null && cartonFrameMaterial != null) rend.sharedMaterial = cartonFrameMaterial;
-    }
-
-    private void ApplyCartonMaterial(GameObject panel)
-    {
-        Collider panelCollider = panel.GetComponent<Collider>();
-        if (panelCollider != null) Destroy(panelCollider);
-        Renderer panelRenderer = panel.GetComponent<Renderer>();
-        if (panelRenderer != null) panelRenderer.sharedMaterial = cartonMaterial;
-    }
-
-    private static void DisableDisplayPhysicsAndScripts(GameObject display)
-    {
-        foreach (Collider itemCollider in display.GetComponentsInChildren<Collider>(true)) itemCollider.enabled = false;
-        foreach (Rigidbody itemBody in display.GetComponentsInChildren<Rigidbody>(true))
-        { itemBody.isKinematic = true; itemBody.useGravity = false; }
-        foreach (MonoBehaviour behaviour in display.GetComponentsInChildren<MonoBehaviour>(true)) behaviour.enabled = false;
+        if (productData == null) return;
+        remainingCount = Mathf.Clamp(count, 0, Mathf.Max(capacity, 0));
+        countInitialized = true;
+        RefreshSlotVisibility();
+        UpdateMass();
+        CountChanged?.Invoke(this, remainingCount);
     }
 
     public bool Open()
     {
-        if (isOpen || IsEmpty || productData == null) return false;
+        if (isOpen || IsEmpty || productData == null || visualRoot == null) return false;
         isOpen = true;
-        if (!displaysBuilt && visualRoot != null)
-        {
-            int perLayer = Mathf.Max(1, columns * rows);
-            int layers = Mathf.Max(1, Mathf.CeilToInt((float)remainingCount / perLayer));
-            float innerX = columns * fittedProductWidth + (columns - 1) * productSpacing;
-            float innerZ = rows * fittedProductDepth + (rows - 1) * productSpacing;
-            float innerY = layers * productHeight;
-            BuildProductDisplays(columns, rows, layers, innerX, innerZ, innerY, perLayer);
-            displaysBuilt = true;
-        }
-        foreach (GameObject display in productDisplays) if (display != null) display.SetActive(true);
+        tapeCut = true;
+        if (tapeObject != null) tapeObject.SetActive(false);
+        BuildProductSlots();
+        RefreshSlotVisibility();
         AnimateFlaps(true);
+        Opened?.Invoke(this);
         return true;
     }
 
@@ -598,79 +193,672 @@ public class ProductBox : MonoBehaviour
     {
         if (!isOpen) return false;
         isOpen = false;
-        foreach (GameObject display in productDisplays) if (display != null) display.SetActive(showProductModelsBeforeOpening);
+        RefreshSlotVisibility();
         AnimateFlaps(false);
         return true;
     }
 
+    /// <summary>Takes one product out. It is spawned at the top of the carton.</summary>
     public GameObject TakeOne()
     {
+        if (productData == null || productData.productPrefab == null) return null;
+        Vector3 pos = transform.position + transform.up * (cartonSize.y * 0.5f);
+        return TakeOne(pos, productData.productPrefab.transform.rotation);
+    }
+
+    public GameObject TakeOne(Vector3 position, Quaternion rotation)
+    {
         if (!isOpen || IsEmpty || productData == null || productData.productPrefab == null) return null;
-        GameObject product = Instantiate(productData.productPrefab);
-        if (product == null) return null;
+
+        GameObject product = Instantiate(productData.productPrefab, position, rotation);
         product.name = productData.productName;
-        int last = productDisplays.Count - 1;
-        if (last >= 0)
-        {
-            GameObject display = productDisplays[last];
-            productDisplays.RemoveAt(last);
-            if (display != null) Destroy(display);
-        }
+
         remainingCount--;
+        if (remainingCount >= 0 && remainingCount < slots.Count && slots[remainingCount] != null)
+            slots[remainingCount].SetActive(false);
+
+        UpdateMass();
+        CountChanged?.Invoke(this, remainingCount);
+        if (IsEmpty) Emptied?.Invoke(this);
         return product;
     }
 
-    public void GiveBack(GameObject product)
+    public bool TryTakeOne(out GameObject product)
     {
-        if (product == null || productData == null) return;
+        product = TakeOne();
+        return product != null;
+    }
+
+    /// <summary>Puts a product back. Returns false (and does nothing) if the carton is already full.</summary>
+    public bool GiveBack(GameObject product)
+    {
+        if (product == null || productData == null || remainingCount >= capacity) return false;
         Destroy(product);
+
+        if (remainingCount < slots.Count && slots[remainingCount] != null)
+            slots[remainingCount].SetActive(isOpen || showProductModelsBeforeOpening);
         remainingCount++;
-        BuildCarton();
-        if (isOpen) Open();
+
+        UpdateMass();
+        CountChanged?.Invoke(this, remainingCount);
+        return true;
     }
 
     public void Vanish() { Destroy(gameObject); }
 
+    // ------------------------------------------------------------------ build
+    public void BuildCarton()
+    {
+        ClearGeneratedVisuals();
+
+        if (productData == null || productData.productPrefab == null)
+        {
+            Debug.LogWarning($"ProductBox on '{name}' needs a ProductData with Product Prefab assigned.", this);
+            remainingCount = 0;
+            capacity = 0;
+            countInitialized = false;
+            return;
+        }
+
+        Shader litShader = ResolveCartonShader();
+        if (litShader == null)
+        {
+            Debug.LogError("ProductBox: no compatible carton shader found. Assign one in the inspector.", this);
+            return;
+        }
+
+        capacity = ComputeCapacity();
+        if (!countInitialized || remainingCount > capacity)
+        {
+            remainingCount = capacity;
+            countInitialized = true;
+        }
+        if (isOpen) tapeCut = true;
+
+        productVisual = GetProductVisual();
+        string layoutKey = LayoutKey();
+        if (!layoutCache.TryGetValue(layoutKey, out layout))
+        {
+            layout = FindBestLayout(capacity);
+            layoutCache[layoutKey] = layout;
+        }
+        cartonSize = layout.size;
+
+        Sprite sprite = productData.productIcon;
+        VisualSet set = GetVisualSet(layoutKey, sprite);
+
+        Material matCarton = GetColorMaterial(litShader, cartonColor);
+        Material matFrame = GetColorMaterial(litShader, cartonFrameColor);
+        Material matDetail = GetColorMaterial(litShader, creaseColor);
+        Material matLabel = GetColorMaterial(litShader, labelColor);
+        Material matTape = GetColorMaterial(litShader, tapeColor);
+        Material[] bySlot = { matCarton, matFrame, matDetail, matLabel };
+
+        visualRoot = new GameObject("CartonVisuals").transform;
+        visualRoot.SetParent(transform, false);
+
+        // One merged mesh for walls, frame, seams and label.
+        Material[] bodyMats = new Material[set.slotIds.Length];
+        for (int i = 0; i < bodyMats.Length; i++) bodyMats[i] = bySlot[set.slotIds[i]];
+        CreateMeshObject("Body", visualRoot, set.body, bodyMats);
+
+        float halfX = cartonSize.x * 0.5f, halfY = cartonSize.y * 0.5f;
+        float fw = FrameWidth(cartonSize);
+        float flapW = cartonSize.x * 0.5f;
+        float flapLen = cartonSize.z - 0.7f * fw;
+        float pivotY = halfY - wallThickness * 0.5f; // flap top surface is flush with the carton top
+
+        leftFlap = CreateFlap("LeftFlap", new Vector3(-halfX, pivotY, 0f), flapW, flapLen, 1f, matCarton);
+        rightFlap = CreateFlap("RightFlap", new Vector3(halfX, pivotY, 0f), flapW, flapLen, -1f, matCarton);
+
+        // Logo halves ride on the flaps, so they follow the animation.
+        if (set.logoLeft != null && set.logoRight != null && sprite != null && sprite.texture != null)
+        {
+            Shader unlit = ResolveLogoShader(litShader);
+            Material logoMat = GetTextureMaterial(unlit, sprite.texture);
+            float y = wallThickness * 0.5f + LogoLift;
+            CreateMeshObject("LogoLeft", leftFlap, set.logoLeft, new[] { logoMat })
+                .transform.localPosition = new Vector3(set.logoCenterX, y, 0f);
+            CreateMeshObject("LogoRight", rightFlap, set.logoRight, new[] { logoMat })
+                .transform.localPosition = new Vector3(-set.logoCenterX, y, 0f);
+        }
+
+        // Tape on top of the closed flaps. It disappears when the carton is opened.
+        float tapeW = Mathf.Min(tapeWidth, cartonSize.x * 0.35f);
+        tapeObject = CreateCube("Tape", visualRoot, matTape,
+            new Vector3(tapeW, tapeThickness, cartonSize.z * 0.92f),
+            new Vector3(0f, halfY + tapeThickness * 0.5f, 0f));
+        tapeObject.SetActive(!tapeCut);
+
+        if (set.hasSprite)
+        {
+            GameObject img = new GameObject("FrontImage");
+            img.transform.SetParent(visualRoot, false);
+            img.transform.localPosition = set.frontImagePos;
+            img.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            img.transform.localScale = Vector3.one * set.frontImageScale;
+            SpriteRenderer sr = img.AddComponent<SpriteRenderer>();
+            sr.sprite = set.sprite;
+            sr.color = Color.white;
+        }
+
+        BoxCollider boxCollider = GetComponent<BoxCollider>();
+        boxCollider.center = Vector3.zero;
+        boxCollider.size = cartonSize;
+        Rigidbody body = GetComponent<Rigidbody>();
+        body.interpolation = RigidbodyInterpolation.Interpolate;
+        UpdateMass();
+
+        displaysBuilt = false;
+        if (showProductModelsBeforeOpening || isOpen) BuildProductSlots();
+        RefreshSlotVisibility();
+        ApplyFlapPose(isOpen);
+    }
+
+    private int ComputeCapacity()
+    {
+        if (productData == null) return 0;
+        return useProductPackSize ? Mathf.Max(1, productData.packSize) : Mathf.Max(1, customCount);
+    }
+
+    private string LayoutKey()
+    {
+        return $"{productData.productPrefab.GetEntityId()}|{productData.rotation}|{capacity}|{productSpacing}|{padding}|{wallThickness}|{maxCartonWidth}";
+    }
+
+    private float FrameWidth(Vector3 size) { return Mathf.Min(frameWidth, size.x * 0.08f); }
+
+    // ------------------------------------------------------------------ layout
+    private CartonLayout FindBestLayout(int count)
+    {
+        float w = productVisual.width, d = productVisual.depth, h = productVisual.height;
+        float shell = 2f * (padding + wallThickness);
+
+        CartonLayout best = new CartonLayout();
+        float bestScore = float.MaxValue;
+
+        for (int layerCount = 1; layerCount <= count; layerCount++)
+        {
+            int unitsPerLayer = Mathf.CeilToInt((float)count / layerCount);
+            for (int rowCount = 1; rowCount <= unitsPerLayer; rowCount++)
+            {
+                int colCount = Mathf.CeilToInt((float)unitsPerLayer / rowCount);
+                // Real number of layers for this grid (the grid can hold more than unitsPerLayer).
+                int layersNeeded = Mathf.CeilToInt((float)count / (colCount * rowCount));
+
+                float ix = colCount * w + (colCount - 1) * productSpacing;
+                float iz = rowCount * d + (rowCount - 1) * productSpacing;
+                float x = ix + shell, z = iz + shell;
+                if (x > maxCartonWidth || z > maxCartonWidth) continue;
+
+                float y = layersNeeded * h + 2f * padding + wallThickness;
+                float volume = x * z * y;
+                float ratio = Mathf.Max(x, z, y) / Mathf.Max(0.001f, Mathf.Min(x, z, y));
+                float score = volume * (1f + Mathf.Max(0f, ratio - 1.4f) * 0.45f);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best.columns = colCount; best.rows = rowCount; best.layers = layersNeeded;
+                    best.innerX = ix; best.innerZ = iz;
+                    best.size = new Vector3(x, y, z);
+                }
+            }
+        }
+
+        if (bestScore == float.MaxValue)
+        {
+            best.columns = 1; best.rows = 1; best.layers = count;
+            best.innerX = w; best.innerZ = d;
+            best.size = new Vector3(w + shell, count * h + 2f * padding + wallThickness, d + shell);
+        }
+        return best;
+    }
+
+    private Vector3 SlotCenter(int index)
+    {
+        int perLayer = Mathf.Max(1, layout.columns * layout.rows);
+        int layer = index / perLayer, inLayer = index % perLayer;
+        int col = inLayer % layout.columns, row = inLayer / layout.columns;
+        float w = productVisual.width, d = productVisual.depth, h = productVisual.height;
+        return new Vector3(
+            -layout.innerX * 0.5f + w * 0.5f + col * (w + productSpacing),
+            -cartonSize.y * 0.5f + wallThickness + padding + h * (layer + 0.5f),
+            -layout.innerZ * 0.5f + d * 0.5f + row * (d + productSpacing));
+    }
+
+    // ------------------------------------------------------------------ product measuring (from meshes, no Instantiate)
+    private ProductVisual GetProductVisual()
+    {
+        GameObject prefab = productData.productPrefab;
+        var key = (prefab.GetEntityId(), productData.rotation);
+        if (productCache.TryGetValue(key, out ProductVisual cached)) return cached;
+
+        ProductVisual pv = new ProductVisual();
+        Transform root = prefab.transform;
+        Matrix4x4 baseMatrix = Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(productData.rotation), root.localScale);
+
+        Bounds bounds = new Bounds();
+        bool hasBounds = false;
+
+        foreach (MeshFilter mf in prefab.GetComponentsInChildren<MeshFilter>(true))
+        {
+            MeshRenderer mr = mf.GetComponent<MeshRenderer>();
+            if (mf.sharedMesh == null || mr == null) continue;
+
+            Matrix4x4 m = baseMatrix * RelativeMatrix(mf.transform, root);
+
+            Bounds mb = mf.sharedMesh.bounds;
+            Vector3 c = mb.center, e = mb.extents;
+            for (int i = 0; i < 8; i++)
+            {
+                Vector3 corner = c + new Vector3((i & 1) == 0 ? -e.x : e.x, (i & 2) == 0 ? -e.y : e.y, (i & 4) == 0 ? -e.z : e.z);
+                Vector3 p = m.MultiplyPoint3x4(corner);
+                if (!hasBounds) { bounds = new Bounds(p, Vector3.zero); hasBounds = true; }
+                else bounds.Encapsulate(p);
+            }
+
+            pv.parts.Add(new ProductPart
+            {
+                mesh = mf.sharedMesh,
+                materials = mr.sharedMaterials,
+                position = m.GetColumn(3),
+                rotation = m.rotation,
+                scale = m.lossyScale
+            });
+        }
+
+        if (hasBounds)
+        {
+            pv.width = Mathf.Max(0.01f, bounds.size.x);
+            pv.depth = Mathf.Max(0.01f, bounds.size.z);
+            pv.height = Mathf.Max(0.01f, bounds.size.y);
+            pv.center = bounds.center;
+        }
+        else
+        {
+            pv.width = productFootprint;
+            pv.depth = productFootprint;
+            pv.height = Mathf.Max(0.01f, productHeight);
+            pv.center = Vector3.zero;
+            Debug.LogWarning("Product prefab has no MeshFilter/MeshRenderer; using fallback carton dimensions.", productData);
+        }
+
+        productCache[key] = pv;
+        return pv;
+    }
+
+    private static Matrix4x4 RelativeMatrix(Transform t, Transform root)
+    {
+        Matrix4x4 m = Matrix4x4.identity;
+        while (t != null && t != root)
+        {
+            m = Matrix4x4.TRS(t.localPosition, t.localRotation, t.localScale) * m;
+            t = t.parent;
+        }
+        return m;
+    }
+
+    // ------------------------------------------------------------------ product slots
+    private void BuildProductSlots()
+    {
+        if (displaysBuilt || visualRoot == null || productVisual == null) return;
+        displaysBuilt = true;
+        slots.Clear();
+
+        for (int i = 0; i < capacity; i++)
+        {
+            GameObject slot = new GameObject($"Inside_{productData.productName}_{i + 1}");
+            slot.transform.SetParent(visualRoot, false);
+            slot.transform.localPosition = SlotCenter(i) - productVisual.center;
+
+            foreach (ProductPart part in productVisual.parts)
+            {
+                GameObject child = new GameObject("Part");
+                child.transform.SetParent(slot.transform, false);
+                child.transform.localPosition = part.position;
+                child.transform.localRotation = part.rotation;
+                child.transform.localScale = part.scale;
+                child.AddComponent<MeshFilter>().sharedMesh = part.mesh;
+                MeshRenderer mr = child.AddComponent<MeshRenderer>();
+                mr.sharedMaterials = part.materials;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+
+            slot.SetActive(false);
+            slots.Add(slot);
+        }
+    }
+
+    private void RefreshSlotVisibility()
+    {
+        bool visible = isOpen || showProductModelsBeforeOpening;
+        for (int i = 0; i < slots.Count; i++)
+        {
+            if (slots[i] != null) slots[i].SetActive(visible && i < remainingCount);
+        }
+    }
+
+    // ------------------------------------------------------------------ cached carton visuals (mesh)
+    private VisualSet GetVisualSet(string layoutKey, Sprite sprite)
+    {
+        string spriteId = sprite != null ? sprite.GetEntityId().ToString() : "none";
+        string key = $"{layoutKey}|{spriteId}|{frameWidth}|{creaseThickness}|{showShippingLabel}";
+        if (visualCache.TryGetValue(key, out VisualSet cached) && cached.body != null) return cached;
+
+        VisualSet set = BuildVisualSet(cartonSize, sprite);
+        visualCache[key] = set;
+        return set;
+    }
+
+    private VisualSet BuildVisualSet(Vector3 size, Sprite sprite)
+    {
+        var slotLists = new List<CombineInstance>[4];
+        for (int i = 0; i < slotLists.Length; i++) slotLists[i] = new List<CombineInstance>();
+
+        float halfX = size.x * 0.5f, halfY = size.y * 0.5f, halfZ = size.z * 0.5f;
+        float t = wallThickness;
+
+        // Walls
+        AddCube(slotLists[SlotCarton], new Vector3(size.x, t, size.z), new Vector3(0f, -halfY + t * 0.5f, 0f));
+        AddCube(slotLists[SlotCarton], new Vector3(size.x, size.y, t), new Vector3(0f, 0f, halfZ - t * 0.5f));
+        AddCube(slotLists[SlotCarton], new Vector3(size.x, size.y, t), new Vector3(0f, 0f, -halfZ + t * 0.5f));
+        AddCube(slotLists[SlotCarton], new Vector3(t, size.y, size.z - 2f * t), new Vector3(-halfX + t * 0.5f, 0f, 0f));
+        AddCube(slotLists[SlotCarton], new Vector3(t, size.y, size.z - 2f * t), new Vector3(halfX - t * 0.5f, 0f, 0f));
+
+        // Frame: 12 bars (4 horizontal on front/back faces... 4 on side faces... 4 vertical corners), no duplicates.
+        float w = FrameWidth(size);
+        float yTop = halfY - w * 0.5f, yBottom = -halfY + w * 0.5f;
+        float zFront = halfZ + w * 0.15f, zBack = -halfZ - w * 0.15f;
+        float xLeft = -halfX - w * 0.15f, xRight = halfX + w * 0.15f;
+        var frame = slotLists[SlotFrame];
+
+        foreach (float z in new[] { zFront, zBack })
+        {
+            AddCube(frame, new Vector3(size.x, w, w), new Vector3(0f, yTop, z));
+            AddCube(frame, new Vector3(size.x, w, w), new Vector3(0f, yBottom, z));
+        }
+        foreach (float x in new[] { xLeft, xRight })
+        {
+            AddCube(frame, new Vector3(w, w, size.z), new Vector3(x, yTop, 0f));
+            AddCube(frame, new Vector3(w, w, size.z), new Vector3(x, yBottom, 0f));
+            AddCube(frame, new Vector3(w, size.y, w), new Vector3(x, 0f, zFront));
+            AddCube(frame, new Vector3(w, size.y, w), new Vector3(x, 0f, zBack));
+        }
+
+        // Fold seams (front and back faces)
+        float seam = Mathf.Max(0.001f, creaseThickness);
+        AddCube(slotLists[SlotDetail], new Vector3(size.x * 0.72f, seam, seam), new Vector3(0f, halfY * 0.35f, halfZ + seam * 0.5f));
+        AddCube(slotLists[SlotDetail], new Vector3(size.x * 0.72f, seam, seam), new Vector3(0f, halfY * 0.35f, -halfZ - seam * 0.5f));
+
+        // Shipping label
+        if (showShippingLabel)
+        {
+            float labelW = Mathf.Min(size.x * 0.32f, 0.16f);
+            float labelH = Mathf.Min(size.y * 0.22f, 0.10f);
+            AddCube(slotLists[SlotLabel], new Vector3(labelW, labelH, seam * 2f),
+                new Vector3(halfX * 0.42f, halfY * 0.28f, halfZ + seam));
+        }
+
+        VisualSet set = new VisualSet();
+
+        // Product picture on the front face (framed).
+        if (sprite != null && sprite.bounds.size.x > 0f && sprite.bounds.size.y > 0f)
+        {
+            Vector2 sSize = sprite.bounds.size;
+            float scale = Mathf.Min(size.x * 0.20f / sSize.x, size.y * 0.22f / sSize.y);
+            float imgW = sSize.x * scale, imgH = sSize.y * scale;
+            float framePad = Mathf.Max(0.008f, frameWidth * 0.55f);
+            float frameT = Mathf.Max(0.006f, frameWidth * 0.35f);
+            Vector3 center = new Vector3(0f, -size.y * 0.08f, halfZ + frameT * 0.5f);
+
+            AddCube(frame, new Vector3(imgW + framePad * 2f, frameT, frameT), center + new Vector3(0f, imgH * 0.5f + framePad, 0f));
+            AddCube(frame, new Vector3(imgW + framePad * 2f, frameT, frameT), center + new Vector3(0f, -imgH * 0.5f - framePad, 0f));
+            AddCube(frame, new Vector3(frameT, imgH + framePad * 2f, frameT), center + new Vector3(-imgW * 0.5f - framePad, 0f, 0f));
+            AddCube(frame, new Vector3(frameT, imgH + framePad * 2f, frameT), center + new Vector3(imgW * 0.5f + framePad, 0f, 0f));
+
+            set.hasSprite = true;
+            set.sprite = sprite;
+            set.frontImageScale = scale;
+            set.frontImagePos = new Vector3(center.x, center.y, halfZ + 0.001f);
+
+            BuildFlapLogoMeshes(set, sprite, size);
+        }
+
+        // Merge everything into one mesh with one submesh per used material slot.
+        var usedSlots = new List<int>();
+        var finals = new List<CombineInstance>();
+        var temps = new List<Mesh>();
+        for (int s = 0; s < slotLists.Length; s++)
+        {
+            if (slotLists[s].Count == 0) continue;
+            Mesh m = new Mesh();
+            m.CombineMeshes(slotLists[s].ToArray(), true, true);
+            temps.Add(m);
+            finals.Add(new CombineInstance { mesh = m, transform = Matrix4x4.identity });
+            usedSlots.Add(s);
+        }
+
+        Mesh body = new Mesh { name = "CartonBody" };
+        body.CombineMeshes(finals.ToArray(), false, false);
+        body.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        foreach (Mesh m in temps) SafeDestroy(m);
+
+        set.body = body;
+        set.slotIds = usedSlots.ToArray();
+        return set;
+    }
+
+    private void BuildFlapLogoMeshes(VisualSet set, Sprite sprite, Vector3 size)
+    {
+        if (sprite.texture == null) return;
+
+        Vector2 sSize = sprite.bounds.size;
+        float scale = Mathf.Min(size.x * 0.82f / sSize.x, size.z * 0.70f / sSize.y);
+        float imageW = sSize.x * scale, imageD = sSize.y * scale;
+        float halfW = imageW * 0.5f;
+        float flapW = size.x * 0.5f;
+        set.logoCenterX = flapW - halfW;
+
+        // Use the sprite's real UVs so atlas-packed sprites also work.
+        Vector2[] uvs = sprite.uv;
+        float u0 = float.MaxValue, u1 = float.MinValue, v0 = float.MaxValue, v1 = float.MinValue;
+        foreach (Vector2 uv in uvs)
+        {
+            u0 = Mathf.Min(u0, uv.x); u1 = Mathf.Max(u1, uv.x);
+            v0 = Mathf.Min(v0, uv.y); v1 = Mathf.Max(v1, uv.y);
+        }
+        float uMid = (u0 + u1) * 0.5f;
+
+        set.logoLeft = CreateLogoHalfMesh("CartonLogoLeft", halfW, imageD, u0, uMid, v0, v1);
+        set.logoRight = CreateLogoHalfMesh("CartonLogoRight", halfW, imageD, uMid, u1, v0, v1);
+    }
+
+    private static Mesh CreateLogoHalfMesh(string meshName, float halfWidth, float depth, float u0, float u1, float v0, float v1)
+    {
+        float l = -halfWidth, r = halfWidth, b = -depth * 0.5f, tp = depth * 0.5f;
+        Mesh mesh = new Mesh { name = meshName };
+        mesh.vertices = new[]
+        {
+            new Vector3(l, 0f, b), new Vector3(r, 0f, b),
+            new Vector3(r, 0f, tp), new Vector3(l, 0f, tp)
+        };
+        mesh.uv = new[] { new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1) };
+        mesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        mesh.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        return mesh;
+    }
+
+    // ------------------------------------------------------------------ flaps
+    private Transform CreateFlap(string flapName, Vector3 pivotPosition, float flapWidth, float flapLength, float direction, Material mat)
+    {
+        Transform pivot = new GameObject(flapName).transform;
+        pivot.SetParent(visualRoot, false);
+        pivot.localPosition = pivotPosition;
+
+        CreateCube("CardboardPanel", pivot, mat,
+            new Vector3(flapWidth, wallThickness, flapLength),
+            new Vector3(direction * flapWidth * 0.5f, 0f, 0f));
+        return pivot;
+    }
+
+    private void AnimateFlaps(bool open)
+    {
+        if (flapAnimation != null) { StopCoroutine(flapAnimation); flapAnimation = null; }
+        if (!isActiveAndEnabled) { ApplyFlapPose(open); return; }
+        flapAnimation = StartCoroutine(FlapTween(open));
+    }
+
+    private void ApplyFlapPose(bool open)
+    {
+        float angle = open ? flapOpenAngle : 0f;
+        if (leftFlap != null) leftFlap.localRotation = Quaternion.Euler(0f, 0f, angle);
+        if (rightFlap != null) rightFlap.localRotation = Quaternion.Euler(0f, 0f, -angle);
+    }
+
+    private IEnumerator FlapTween(bool open)
+    {
+        Quaternion ls = leftFlap != null ? leftFlap.localRotation : Quaternion.identity;
+        Quaternion rs = rightFlap != null ? rightFlap.localRotation : Quaternion.identity;
+        float angle = open ? flapOpenAngle : 0f;
+        Quaternion le = Quaternion.Euler(0f, 0f, angle);
+        Quaternion re = Quaternion.Euler(0f, 0f, -angle);
+
+        float elapsed = 0f, duration = Mathf.Max(0.01f, flapOpenDuration);
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            if (leftFlap != null) leftFlap.localRotation = Quaternion.Slerp(ls, le, k);
+            if (rightFlap != null) rightFlap.localRotation = Quaternion.Slerp(rs, re, k);
+            yield return null;
+        }
+        ApplyFlapPose(open);
+        flapAnimation = null;
+    }
+
+    // ------------------------------------------------------------------ helpers: objects, meshes, materials
+    private static Mesh GetCubeMesh()
+    {
+        if (cubeMesh != null) return cubeMesh;
+        GameObject temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cubeMesh = temp.GetComponent<MeshFilter>().sharedMesh;
+        SafeDestroy(temp);
+        return cubeMesh;
+    }
+
+    private static void AddCube(List<CombineInstance> list, Vector3 size, Vector3 position)
+    {
+        list.Add(new CombineInstance
+        {
+            mesh = GetCubeMesh(),
+            transform = Matrix4x4.TRS(position, Quaternion.identity, size)
+        });
+    }
+
+    private static GameObject CreateCube(string objectName, Transform parent, Material mat, Vector3 size, Vector3 localPosition)
+    {
+        GameObject go = CreateMeshObject(objectName, parent, GetCubeMesh(), new[] { mat });
+        go.transform.localPosition = localPosition;
+        go.transform.localScale = size;
+        return go;
+    }
+
+    private static GameObject CreateMeshObject(string objectName, Transform parent, Mesh mesh, Material[] mats)
+    {
+        GameObject go = new GameObject(objectName);
+        go.transform.SetParent(parent, false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        go.AddComponent<MeshRenderer>().sharedMaterials = mats;
+        return go;
+    }
+
+    private Shader ResolveCartonShader()
+    {
+        if (cartonShader != null) return cartonShader;
+        Shader s = Shader.Find("Universal Render Pipeline/Lit");
+        if (s == null) s = Shader.Find("Standard");
+        return s;
+    }
+
+    private Shader ResolveLogoShader(Shader fallback)
+    {
+        if (logoShader != null) return logoShader;
+        Shader s = Shader.Find("Universal Render Pipeline/Unlit");
+        if (s == null) s = Shader.Find("Unlit/Texture");
+        return s != null ? s : fallback;
+    }
+
+    private static Material GetColorMaterial(Shader shader, Color color)
+    {
+        Color32 c = color;
+        string key = $"{shader.name}|c|{c.r},{c.g},{c.b},{c.a}";
+        if (materialCache.TryGetValue(key, out Material cached) && cached != null) return cached;
+
+        Material m = new Material(shader) { name = "Carton_" + key, enableInstancing = true };
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+        if (m.HasProperty("_Color")) m.SetColor("_Color", color);
+        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.1f);
+        if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.1f);
+        m.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        materialCache[key] = m;
+        return m;
+    }
+
+    private static Material GetTextureMaterial(Shader shader, Texture texture)
+    {
+        string key = $"{shader.name}|t|{texture.GetEntityId()}";
+        if (materialCache.TryGetValue(key, out Material cached) && cached != null) return cached;
+
+        Material m = new Material(shader) { name = "CartonLogo_" + texture.name, enableInstancing = true };
+        m.mainTexture = texture;
+        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", texture);
+        m.hideFlags = HideFlags.DontUnloadUnusedAsset;
+        materialCache[key] = m;
+        return m;
+    }
+
+    private static void SafeDestroy(Object obj)
+    {
+        if (obj == null) return;
+        if (Application.isPlaying) Destroy(obj); else DestroyImmediate(obj);
+    }
+
+    private void UpdateMass()
+    {
+        Rigidbody body = GetComponent<Rigidbody>();
+        if (body != null) body.mass = Mathf.Max(0.2f, cartonMass + remainingCount * unitMass);
+    }
+
     private void ClearGeneratedVisuals()
     {
+        if (flapAnimation != null) { StopCoroutine(flapAnimation); flapAnimation = null; }
+
         if (visualRoot != null)
         {
-            if (Application.isPlaying) Destroy(visualRoot.gameObject); else DestroyImmediate(visualRoot.gameObject);
+            // Detach first so the old visuals don't linger for a frame next to the new ones.
+            visualRoot.gameObject.SetActive(false);
+            visualRoot.SetParent(null);
+            SafeDestroy(visualRoot.gameObject);
         }
-        productDisplays.Clear(); displaysBuilt = false; leftFlap = null; rightFlap = null;
-        if (detailMaterial != null)
-        {
-            if (Application.isPlaying) Destroy(detailMaterial); else DestroyImmediate(detailMaterial);
-            detailMaterial = null;
-        }
-        if (labelMaterial != null)
-        {
-            if (Application.isPlaying) Destroy(labelMaterial); else DestroyImmediate(labelMaterial);
-            labelMaterial = null;
-        }
-        if (cartonFrameMaterial != null)
-        {
-            if (Application.isPlaying) Destroy(cartonFrameMaterial); else DestroyImmediate(cartonFrameMaterial);
-            cartonFrameMaterial = null;
-        }
-        if (tapeMaterial != null)
-        {
-            if (Application.isPlaying) Destroy(tapeMaterial); else DestroyImmediate(tapeMaterial);
-            tapeMaterial = null;
-        }
-        if (cartonMaterial != null)
-        {
-            if (Application.isPlaying) Destroy(cartonMaterial); else DestroyImmediate(cartonMaterial);
-            cartonMaterial = null;
-        }
+        visualRoot = null;
+        leftFlap = null;
+        rightFlap = null;
+        tapeObject = null;
+        slots.Clear();
+        displaysBuilt = false;
+        // Meshes and materials are shared through static caches: never destroyed per carton.
     }
 
 #if UNITY_EDITOR
     private void OnValidate()
     {
-        customCount = Mathf.Max(1, customCount); columns = Mathf.Max(1, columns); rows = Mathf.Max(1, rows);
-        productFootprint = Mathf.Max(0.005f, productFootprint); productHeight = Mathf.Max(0.005f, productHeight);
-        wallThickness = Mathf.Max(0.005f, wallThickness); productSpacing = Mathf.Max(0f, productSpacing);
+        customCount = Mathf.Max(1, customCount);
+        productFootprint = Mathf.Max(0.005f, productFootprint);
+        productHeight = Mathf.Max(0.005f, productHeight);
+        wallThickness = Mathf.Max(0.005f, wallThickness);
+        productSpacing = Mathf.Max(0.001f, productSpacing);
         padding = Mathf.Max(0f, padding);
     }
 #endif
