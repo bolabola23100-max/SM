@@ -682,6 +682,20 @@ public class ComputerShopUI : MonoBehaviour
         else balance -= total;
         int cartonIndex = storedCartons;
         int perRow = Mathf.Max(1, cartonsPerRow);
+        const int depthRowsPerLevel = 10;
+        const float receivingHeightLimit = 4f;
+        int cartonsPerLevel = perRow * depthRowsPerLevel;
+        float safeLayerStep = Mathf.Max(0.45f, cartonSpacingY);
+        int maxLevels = Mathf.Max(1, Mathf.FloorToInt((receivingHeightLimit - spawnLift) / safeLayerStep) + 1);
+
+        // The receiving area is a fixed 3D grid: columns across, 10 rows deep,
+        // then stacked upward. This prevents the old layout from creating
+        // an endlessly tall column after every ten cartons.
+        if (storedCartons + orderCartons > cartonsPerLevel * maxLevels)
+        {
+            SetStatus("RECEIVING AREA HEIGHT LIMIT REACHED (4 METERS).");
+            return;
+        }
 
         foreach (KeyValuePair<ProductData, int> entry in cart)
         {
@@ -699,20 +713,35 @@ public class ComputerShopUI : MonoBehaviour
             for (int i = 0; i < count; i++)
             {
                 int column = cartonIndex % perRow;
-                int row = cartonIndex / perRow;
+                int slotInLevel = cartonIndex % cartonsPerLevel;
+                int depthRow = slotInLevel / perRow;
+                int level = cartonIndex / cartonsPerLevel;
 
-                // Fixed spacing: never depends on the carton's collider/scale,
-                // so one stretched carton can not push the next one out of the map.
+                // Each level has a 3 x 10 grid. Levels rise in controlled
+                // increments and never exceed the 4 m receiving-area limit.
                 Vector3 position = deliveryPoint.position
                     + deliveryPoint.right * (column * cartonSpacingX)
-                    + deliveryPoint.forward * ((row % 10) * cartonSpacingZ)
-                    + Vector3.up * (spawnLift + (row / 10) * cartonSpacingY);
+                    + deliveryPoint.forward * (depthRow * cartonSpacingZ)
+                    + Vector3.up * (spawnLift + level * safeLayerStep);
 
                 try
                 {
                     ProductBox carton = Instantiate(productBoxPrefab, position, deliveryPoint.rotation);
                     Vector3 scaleBefore = carton.transform.localScale;
                     carton.SetProduct(data, data.packSize);
+
+                    BoxCollider cartonCollider = carton.GetComponent<BoxCollider>();
+                    if (cartonCollider != null)
+                    {
+                        float topHeight = carton.transform.position.y + cartonCollider.bounds.extents.y
+                            - deliveryPoint.position.y;
+                        if (topHeight > receivingHeightLimit)
+                        {
+                            Destroy(carton.gameObject);
+                            Debug.LogWarning("[Order] Carton rejected: 4 m receiving height limit reached.", carton);
+                            continue;
+                        }
+                    }
 
                     Debug.Log("[Order] " + data.productName + " #" + (i + 1) +
                         " | scale before: " + scaleBefore +
