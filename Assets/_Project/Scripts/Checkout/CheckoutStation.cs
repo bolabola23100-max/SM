@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class CheckoutStation : MonoBehaviour
 {
@@ -11,18 +12,23 @@ public class CheckoutStation : MonoBehaviour
     private PlayerMovement player;
     private Camera playerCamera;
     private bool highlighted;
+    private bool warnedNoProperty;
     private Renderer[] renderers;
 
-    private readonly Dictionary<Renderer, MaterialPropertyBlock[]> originalBlocks =
-        new Dictionary<Renderer, MaterialPropertyBlock[]>();
-    private readonly Dictionary<Renderer, Material[]> runtimeMaterials =
-        new Dictionary<Renderer, Material[]>();
+    // Original shared materials, and the green copies used only while highlighted.
+    private readonly Dictionary<Renderer, Material[]> originals = new Dictionary<Renderer, Material[]>();
+    private readonly Dictionary<Renderer, Material[]> tintedCopies = new Dictionary<Renderer, Material[]>();
     private static readonly RaycastHit[] hitBuffer = new RaycastHit[64];
+
+    // Property names used by URP Lit, Built-in Standard and glTFast (the .glb importer).
+    private static readonly string[] BaseColorProps = { "_BaseColor", "_Color", "baseColorFactor", "BaseColorFactor" };
+    private static readonly string[] EmissionProps = { "_EmissionColor", "emissiveFactor", "EmissiveFactor" };
 
     private void Awake()
     {
-        CacheRenderers();
-        CacheOriginalAppearance();
+        renderers = GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            Debug.LogWarning("[CheckoutStation] No Renderer components found under " + name);
     }
 
     private void Start() { ResolveReferences(); }
@@ -30,34 +36,10 @@ public class CheckoutStation : MonoBehaviour
     private void Update()
     {
         ResolveReferences();
-        bool aimed = (checkoutManager == null || !checkoutManager.IsActive) && IsAimedAtThisStation();
-        SetHighlight(aimed);
-    }
 
-    private void CacheRenderers()
-    {
-        // Include every visible mesh beneath this cashier object, including inactive model parts.
-        renderers = GetComponentsInChildren<Renderer>(true);
-        if (renderers == null || renderers.Length == 0)
-            Debug.LogWarning("[CheckoutStation] No Renderer components found under " + name);
-    }
-
-    private void CacheOriginalAppearance()
-    {
-        foreach (Renderer r in renderers)
-        {
-            if (!r) continue;
-            Material[] sourceMaterials = r.sharedMaterials;
-            MaterialPropertyBlock[] saved = new MaterialPropertyBlock[sourceMaterials.Length];
-
-            for (int i = 0; i < sourceMaterials.Length; i++)
-            {
-                saved[i] = new MaterialPropertyBlock();
-                r.GetPropertyBlock(saved[i], i);
-            }
-
-            originalBlocks[r] = saved;
-        }
+        // Green only while aiming at the cashier. Once the player is inside checkout, the colour is removed.
+        bool inCheckout = checkoutManager != null && checkoutManager.IsActive;
+        SetHighlight(!inCheckout && IsAimedAtThisStation());
     }
 
     private void ResolveReferences()
@@ -95,9 +77,8 @@ public class CheckoutStation : MonoBehaviour
         bool result = false;
         if (nearestIndex >= 0)
         {
-            Transform hitTransform = hitBuffer[nearestIndex].collider.transform;
-            CheckoutStation hitStation = hitTransform.GetComponentInParent<CheckoutStation>();
-            result = hitStation == this;
+            CheckoutStation hit = hitBuffer[nearestIndex].collider.GetComponentInParent<CheckoutStation>();
+            result = hit == this;
         }
 
         for (int i = 0; i < count; i++) hitBuffer[i] = default;
@@ -107,7 +88,7 @@ public class CheckoutStation : MonoBehaviour
     public bool TryInteract()
     {
         ResolveReferences();
-        if ((checkoutManager == null) || checkoutManager.IsActive || !IsAimedAtThisStation())
+        if (checkoutManager == null || checkoutManager.IsActive || !IsAimedAtThisStation())
             return false;
 
         checkoutManager.EnterCheckout();
@@ -123,58 +104,83 @@ public class CheckoutStation : MonoBehaviour
         {
             if (!r) continue;
 
-            if (!state)
-            {
-                if (originalBlocks.TryGetValue(r, out MaterialPropertyBlock[] saved))
-                {
-                    for (int i = 0; i < r.sharedMaterials.Length; i++)
-                        r.SetPropertyBlock(i < saved.Length ? saved[i] : null, i);
-                }
+            if (!state) { Restore(r); continue; }
 
-                if (runtimeMaterials.TryGetValue(r, out Material[] originals))
-                {
-                    r.materials = originals;
-                    runtimeMaterials.Remove(r);
-                }
-                continue;
+            Material[] source = r.sharedMaterials;
+            originals[r] = source;
+
+            Material[] copies = new Material[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (!source[i]) continue;
+                copies[i] = new Material(source[i]);
+                Tint(copies[i]);
             }
 
-            Material[] originalMaterials = r.sharedMaterials;
-            Material[] instances = r.materials;
-            runtimeMaterials[r] = originalMaterials;
-            for (int i = 0; i < instances.Length; i++)
-            {
-                Material material = instances[i];
-                if (!material) continue;
-
-                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", aimedColor);
-                if (material.HasProperty("_Color")) material.SetColor("_Color", aimedColor);
-                if (material.HasProperty("_EmissionColor"))
-                {
-                    material.EnableKeyword("_EMISSION");
-                    material.SetColor("_EmissionColor", aimedColor * emissionStrength);
-                }
-            }
-
-            // Also set a property block so SRP-batched materials receive the tint.
-            for (int i = 0; i < instances.Length; i++)
-            {
-                Material material = instances[i];
-                if (!material) continue;
-                MaterialPropertyBlock block = new MaterialPropertyBlock();
-                r.GetPropertyBlock(block, i);
-                if (material.HasProperty("_BaseColor")) block.SetColor("_BaseColor", aimedColor);
-                if (material.HasProperty("_Color")) block.SetColor("_Color", aimedColor);
-                if (material.HasProperty("_EmissionColor"))
-                    block.SetColor("_EmissionColor", aimedColor * emissionStrength);
-                r.SetPropertyBlock(block, i);
-            }
+            tintedCopies[r] = copies;
+            r.sharedMaterials = copies;
         }
     }
 
-    private void OnDisable()
+    private void Restore(Renderer r)
     {
-        SetHighlight(false);
+        if (originals.TryGetValue(r, out Material[] orig))
+        {
+            r.sharedMaterials = orig;
+            originals.Remove(r);
+        }
+
+        if (tintedCopies.TryGetValue(r, out Material[] copies))
+        {
+            foreach (Material m in copies) if (m) Destroy(m);
+            tintedCopies.Remove(r);
+        }
     }
 
+    private void Tint(Material m)
+    {
+        bool tinted = false;
+
+        foreach (string p in BaseColorProps)
+        {
+            if (!m.HasProperty(p)) continue;
+            m.SetColor(p, aimedColor);
+            tinted = true;
+        }
+
+        foreach (string p in EmissionProps)
+        {
+            if (!m.HasProperty(p)) continue;
+            m.EnableKeyword("_EMISSION");
+            m.SetColor(p, aimedColor * emissionStrength);
+            tinted = true;
+        }
+
+        // Unknown shader: tint any colour property whose name looks like a main/base/emissive colour.
+        if (!tinted)
+        {
+            Shader sh = m.shader;
+            for (int i = 0; i < sh.GetPropertyCount(); i++)
+            {
+                if (sh.GetPropertyType(i) != ShaderPropertyType.Color) continue;
+                string n = sh.GetPropertyName(i);
+                string low = n.ToLowerInvariant();
+                if (low.Contains("base") || low.Contains("color") || low.Contains("emissi"))
+                {
+                    m.SetColor(n, aimedColor);
+                    tinted = true;
+                }
+            }
+        }
+
+        if (!tinted && !warnedNoProperty)
+        {
+            warnedNoProperty = true;
+            Debug.LogWarning("[CheckoutStation] Could not tint shader '" + m.shader.name +
+                             "' - it has no colour property I recognise.");
+        }
+    }
+
+    private void OnDisable() { SetHighlight(false); }
+    private void OnDestroy() { SetHighlight(false); }
 }

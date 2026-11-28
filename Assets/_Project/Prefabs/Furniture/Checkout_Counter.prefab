@@ -117,13 +117,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8192858193637716358}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
   m_LocalPosition: {x: -0.246, y: -0.808, z: 1.087}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2646127112776594044}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!1 &9074466207783480369
 GameObject:
   m_ObjectHideFlags: 0
@@ -270,6 +270,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -488264757828614282, guid: ed40cb5b921f52548b96f22182272e85, type: 3}
       insertIndex: -1
       addedObject: {fileID: 7470260486215272209}
+    - targetCorrespondingSourceObject: {fileID: -488264757828614282, guid: ed40cb5b921f52548b96f22182272e85, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2658392631767742909}
+    - targetCorrespondingSourceObject: {fileID: -488264757828614282, guid: ed40cb5b921f52548b96f22182272e85, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 88181369221919024}
   m_SourcePrefab: {fileID: -4161369568681901532, guid: ed40cb5b921f52548b96f22182272e85, type: 3}
 --- !u!4 &2646127112776594044 stripped
 Transform:
@@ -317,3 +323,46 @@ MonoBehaviour:
   checkoutManager: {fileID: 0}
   lookDistance: 5
   aimedColor: {r: 0.25, g: 1, b: 0.35, a: 1}
+--- !u!114 &2658392631767742909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2950112649038974499}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8040b7dd6c83a8548b2604762a84c23d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlacementChecker
+  shelf: {fileID: 88181369221919024}
+  blockingLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  floorTag: ShelfFloor
+  wallTag: ShelfWall
+  checkInterval: 0.2
+  floorSampleInset: 0.85
+  floorRayStartOffset: 0.25
+  floorRayExtraDistance: 3
+  overlapInset: 0.96
+--- !u!114 &88181369221919024
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2950112649038974499}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 144b8c2cad530644f89bc102bc277194, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShelfPlacement
+  moveDistance: 2.5
+  moveSmoothness: 15
+  rotationStep: 90
+  playerCamera: {fileID: 0}
+  placementCollider: {fileID: 8334971915201808721}
+  validColor: {r: 0, g: 1, b: 0, a: 1}
+  invalidColor: {r: 1, g: 0, b: 0, a: 1}
+  outlineWidth: 0.025
