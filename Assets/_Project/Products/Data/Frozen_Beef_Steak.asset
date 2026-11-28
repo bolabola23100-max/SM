@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b3e4f2d9c8a5b6e0d1f2a3c4b5e6d72, type: 3}
+  m_Name: Frozen_Beef_Steak
+  m_EditorClassIdentifier: Assembly-CSharp::ProductData
+  productId: frozen_beef_steak
+  productName: Frozen_Beef_Steak
+  category: 2
+  productPrefab: {fileID: 7304422265204713552, guid: c57ccf1236b973b4cab8719d24fe8d6e, type: 3}
+  productIcon: {fileID: -7948810703306689976, guid: afbda5d8b56821d49baf5a4017d5ca00, type: 3}
+  buyPrice: 1
+  marketPrice: 5
+  packSize: 20
+  columns: 2
+  rows: 2
+  layers: 5
+  productHeight: 0.11
+  rotation: {x: 0, y: 0, z: 0}
+  offset: {x: 0, y: 0, z: 0}

@@ -97,14 +97,13 @@ MonoBehaviour:
   productData: {fileID: 11400000, guid: bb4f6ac1f6669e447b4e43e98a784c33, type: 2}
   useProductPackSize: 1
   customCount: 12
-  columns: 3
-  rows: 2
+  columns: 1
+  rows: 1
   productSpacing: 0.015
   productFootprint: 0.18
   productHeight: 0.22
   wallThickness: 0.018
   padding: 0.035
-  wallHeightRatio: 0.72
   cartonColor: {r: 0.62, g: 0.4, b: 0.22, a: 1}
   showProductModelsBeforeOpening: 0
   buildOnAwake: 1
