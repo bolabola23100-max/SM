@@ -89,17 +89,59 @@ public class CheckoutManager : MonoBehaviour
 
     private void ResolveReferences()
     {
+        // Find scene components automatically so the Inspector can stay mostly empty.
         if (!playerMovement) playerMovement = FindFirstObjectByType<PlayerMovement>();
         if (!productInteraction) productInteraction = FindFirstObjectByType<ProductInteraction>();
         if (!mobileJoystick) mobileJoystick = FindFirstObjectByType<MobileJoystick>();
         if (!touchLook) touchLook = FindFirstObjectByType<TouchLook>();
         if (!computerInteraction) computerInteraction = FindFirstObjectByType<ComputerInteraction>();
 
+        // Resolve the player camera from the player, product interaction, then MainCamera.
         if (playerCamera == null && playerMovement != null && playerMovement.playerCamera != null)
             playerCamera = playerMovement.playerCamera.GetComponent<Camera>();
         if (playerCamera == null && productInteraction != null)
             playerCamera = productInteraction.playerCamera;
         if (playerCamera == null) playerCamera = Camera.main;
+
+        // Wire the discovered references back into the related components as well.
+        if (playerMovement != null)
+        {
+            if (playerMovement.playerCamera == null && playerCamera != null)
+                playerMovement.playerCamera = playerCamera.transform;
+            if (playerMovement.joystick == null && mobileJoystick != null)
+                playerMovement.joystick = mobileJoystick;
+            if (playerMovement.touchLook == null && touchLook != null)
+                playerMovement.touchLook = touchLook;
+        }
+
+        if (productInteraction != null && productInteraction.playerCamera == null)
+            productInteraction.playerCamera = playerCamera;
+
+        if (computerInteraction != null)
+        {
+            if (computerInteraction.playerCamera == null)
+                computerInteraction.playerCamera = playerCamera;
+            if (computerInteraction.playerMovement == null)
+                computerInteraction.playerMovement = playerMovement;
+        }
+
+        // Scene objects are resolved by their agreed names.
+        if (checkoutScreenPoint == null)
+        {
+            GameObject point = GameObject.Find("CheckoutUI_Point");
+            if (point != null) checkoutScreenPoint = point.transform;
+        }
+        if (cashierStandPoint == null)
+        {
+            GameObject point = GameObject.Find("CheckoutPoint");
+            if (point != null) cashierStandPoint = point.transform;
+        }
+        if (exitButton == null)
+        {
+            GameObject buttonObject = GameObject.Find("ExitCheckoutButton");
+            if (!buttonObject) buttonObject = GameObject.Find("CheckoutExitButton");
+            if (buttonObject) exitButton = buttonObject;
+        }
     }
 
     void Update()
