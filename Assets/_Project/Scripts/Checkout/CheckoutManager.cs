@@ -318,11 +318,6 @@ public class CheckoutManager : MonoBehaviour
                 return;
             }
 
-            if (!frontCustomerProductWasScanned)
-            {
-                SetStatus("Scan the front customer's products at the scanner.");
-                return;
-            }
         }
 
         float originalTotal = GetCartTotal();
