@@ -33,6 +33,12 @@ public class ProductBox : MonoBehaviour
     [SerializeField] private bool showProductModelsBeforeOpening = false;
     [SerializeField] private bool buildOnAwake = true;
 
+    [Header("Carton Details")]
+    [SerializeField] private Color creaseColor = new Color(0.48f, 0.30f, 0.16f);
+    [Min(0.001f)][SerializeField] private float creaseThickness = 0.002f;
+    [SerializeField] private bool showShippingLabel = true;
+    [SerializeField] private Color labelColor = new Color(0.88f, 0.84f, 0.76f);
+
     [Header("Carton Tape")]
     [SerializeField] private Color tapeColor = new Color(0.94f, 0.94f, 0.90f);
     [Min(0.005f)][SerializeField] private float tapeWidth = 0.055f;
@@ -46,7 +52,10 @@ public class ProductBox : MonoBehaviour
     private Transform leftFlap;
     private Transform rightFlap;
     private Material cartonMaterial;
-    private Material cartonFrameMaterial;\n    private Material tapeMaterial;
+    private Material cartonFrameMaterial;
+    private Material tapeMaterial;
+    private Material detailMaterial;
+    private Material labelMaterial;
     private int remainingCount;
     private Vector3 cartonSize;
     private float fittedProductWidth;
@@ -126,7 +135,13 @@ public class ProductBox : MonoBehaviour
         cartonMaterial = new Material(cartonShader);
         cartonMaterial.color = cartonColor;
         cartonFrameMaterial = new Material(cartonMaterial);
-        cartonFrameMaterial.color = cartonFrameColor;\n        tapeMaterial = new Material(cartonMaterial);\n        tapeMaterial.color = tapeColor;
+        cartonFrameMaterial.color = cartonFrameColor;
+        tapeMaterial = new Material(cartonMaterial);
+        tapeMaterial.color = tapeColor;
+        detailMaterial = new Material(cartonMaterial);
+        detailMaterial.color = creaseColor;
+        labelMaterial = new Material(cartonMaterial);
+        labelMaterial.color = labelColor;
 
         float halfX = cartonSize.x * 0.5f, halfY = cartonSize.y * 0.5f, halfZ = cartonSize.z * 0.5f;
         float t = wallThickness;
@@ -139,7 +154,9 @@ public class ProductBox : MonoBehaviour
         rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t, -1f);
 
         // Dark, slightly raised cardboard border strips around the four outer walls.
-        AddWallFrame(halfX, halfY, halfZ, t);\n        AddCartonTape(halfX, halfY, halfZ);
+        AddWallFrame(halfX, halfY, halfZ, t);
+        AddCartonTape(halfX, halfY, halfZ);
+        AddCartonDetails(halfX, halfY, halfZ);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
@@ -383,6 +400,52 @@ public class ProductBox : MonoBehaviour
         if (rend != null && tapeMaterial != null) rend.sharedMaterial = tapeMaterial;
     }
 
+    private void AddCartonDetails(float halfX, float halfY, float halfZ)
+    {
+        // Subtle folded-panel seam lines on the front and rear faces.
+        float seam = Mathf.Max(0.001f, creaseThickness);
+        float faceOffset = wallThickness * 0.5f + seam * 0.5f;
+        CreateDetailBar(new Vector3(cartonSize.x * 0.72f, seam, seam),
+            new Vector3(0f, halfY * 0.35f, halfZ + faceOffset));
+        CreateDetailBar(new Vector3(cartonSize.x * 0.72f, seam, seam),
+            new Vector3(0f, halfY * 0.35f, -halfZ - faceOffset));
+
+        // A restrained shipping-label patch on the front face.
+        if (showShippingLabel)
+        {
+            float labelW = Mathf.Min(cartonSize.x * 0.32f, 0.16f);
+            float labelH = Mathf.Min(cartonSize.y * 0.22f, 0.10f);
+            CreateLabelPatch(new Vector3(labelW, labelH, seam * 2f),
+                new Vector3(halfX * 0.42f, halfY * 0.28f, halfZ + wallThickness * 0.5f + seam));
+        }
+    }
+
+    private void CreateDetailBar(Vector3 size, Vector3 localPosition)
+    {
+        GameObject detail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        detail.name = "CartonFoldSeam";
+        detail.transform.SetParent(visualRoot, false);
+        detail.transform.localPosition = localPosition;
+        detail.transform.localScale = size;
+        Collider col = detail.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        Renderer rend = detail.GetComponent<Renderer>();
+        if (rend != null && detailMaterial != null) rend.sharedMaterial = detailMaterial;
+    }
+
+    private void CreateLabelPatch(Vector3 size, Vector3 localPosition)
+    {
+        GameObject label = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        label.name = "ShippingLabel";
+        label.transform.SetParent(visualRoot, false);
+        label.transform.localPosition = localPosition;
+        label.transform.localScale = size;
+        Collider col = label.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        Renderer rend = label.GetComponent<Renderer>();
+        if (rend != null && labelMaterial != null) rend.sharedMaterial = labelMaterial;
+    }
+
     private void CreateTrimBar(Vector3 size, Vector3 localPosition)
     {
         GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -475,6 +538,26 @@ public class ProductBox : MonoBehaviour
             if (Application.isPlaying) Destroy(visualRoot.gameObject); else DestroyImmediate(visualRoot.gameObject);
         }
         productDisplays.Clear(); displaysBuilt = false; leftFlap = null; rightFlap = null;
+        if (detailMaterial != null)
+        {
+            if (Application.isPlaying) Destroy(detailMaterial); else DestroyImmediate(detailMaterial);
+            detailMaterial = null;
+        }
+        if (labelMaterial != null)
+        {
+            if (Application.isPlaying) Destroy(labelMaterial); else DestroyImmediate(labelMaterial);
+            labelMaterial = null;
+        }
+        if (cartonFrameMaterial != null)
+        {
+            if (Application.isPlaying) Destroy(cartonFrameMaterial); else DestroyImmediate(cartonFrameMaterial);
+            cartonFrameMaterial = null;
+        }
+        if (tapeMaterial != null)
+        {
+            if (Application.isPlaying) Destroy(tapeMaterial); else DestroyImmediate(tapeMaterial);
+            tapeMaterial = null;
+        }
         if (cartonMaterial != null)
         {
             if (Application.isPlaying) Destroy(cartonMaterial); else DestroyImmediate(cartonMaterial);
