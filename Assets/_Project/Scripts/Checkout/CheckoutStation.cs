@@ -139,8 +139,9 @@ public class CheckoutStation : MonoBehaviour
                 continue;
             }
 
+            Material[] originalMaterials = r.sharedMaterials;
             Material[] instances = r.materials;
-            runtimeMaterials[r] = r.sharedMaterials;
+            runtimeMaterials[r] = originalMaterials;
             for (int i = 0; i < instances.Length; i++)
             {
                 Material material = instances[i];
@@ -176,14 +177,4 @@ public class CheckoutStation : MonoBehaviour
         SetHighlight(false);
     }
 
-    private void OnDestroy()
-    {
-        foreach (var pair in runtimeMaterials)
-        {
-            Material[] instances = pair.Key ? pair.Key.materials : null;
-            if (instances == null) continue;
-            foreach (Material material in instances)
-                if (material) Destroy(material);
-        }
-    }
 }
