@@ -1,84 +1,56 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 public class CheckoutStation : MonoBehaviour
 {
     [SerializeField] private CheckoutManager checkoutManager;
     [SerializeField, Min(1f)] private float lookDistance = 5f;
-    [SerializeField] private Color aimedColor = new Color(.25f, 1f, .35f, 1f);
+    [SerializeField] private Color aimedColor = new Color(.15f, 1f, .2f, 1f);
+    [SerializeField, Range(0f, 5f)] private float emissionStrength = 1.5f;
+
     private PlayerMovement player;
     private Camera playerCamera;
     private bool highlighted;
     private Renderer[] renderers;
+
     private readonly Dictionary<Renderer, MaterialPropertyBlock[]> originalBlocks =
         new Dictionary<Renderer, MaterialPropertyBlock[]>();
+    private readonly Dictionary<Renderer, Material[]> runtimeMaterials =
+        new Dictionary<Renderer, Material[]>();
+    private static readonly RaycastHit[] hitBuffer = new RaycastHit[64];
 
-    void Awake()
+    private void Awake()
     {
-        renderers = GetComponentsInChildren<Renderer>(true);
-        CachePropertyBlocks();
+        CacheRenderers();
+        CacheOriginalAppearance();
     }
-    void Start() { ResolveReferences(); }
 
-    void Update()
+    private void Start() { ResolveReferences(); }
+
+    private void Update()
     {
         ResolveReferences();
-        if (checkoutManager != null && checkoutManager.IsActive) { SetHighlight(false); return; }
-        bool aimed = IsAimedAtThisStation();
+        bool aimed = (checkoutManager == null || !checkoutManager.IsActive) && IsAimedAtThisStation();
         SetHighlight(aimed);
-
     }
 
-    void ResolveReferences()
+    private void CacheRenderers()
     {
-        if (!checkoutManager) checkoutManager = CheckoutManager.Instance;
-        if (!player) player = FindFirstObjectByType<PlayerMovement>();
-        if (playerCamera == null && player != null && player.playerCamera != null) playerCamera = player.playerCamera.GetComponent<Camera>();
-        if (playerCamera == null) playerCamera = Camera.main;
+        // Include every visible mesh beneath this cashier object, including inactive model parts.
+        renderers = GetComponentsInChildren<Renderer>(true);
+        if (renderers == null || renderers.Length == 0)
+            Debug.LogWarning("[CheckoutStation] No Renderer components found under " + name);
     }
 
-    bool HasCheckoutTag(Transform target)
-    {
-        for (Transform t = target; t != null; t = t.parent) if (t.CompareTag("Checkout")) return true;
-        return false;
-    }
-
-    public bool IsAimedAtThisStation()
-    {
-        if (playerCamera == null) return false;
-        RaycastHit[] hits = Physics.RaycastAll(new Ray(playerCamera.transform.position, playerCamera.transform.forward), lookDistance, ~0, QueryTriggerInteraction.Collide);
-        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-        foreach (RaycastHit hit in hits)
-        {
-            if (player != null && hit.collider.transform.root == player.transform.root) continue;
-            CheckoutStation station = hit.collider.GetComponentInParent<CheckoutStation>();
-            if (station != null) return station == this;
-            if (HasCheckoutTag(hit.collider.transform))
-                return hit.collider.transform.root == transform.root || hit.collider.transform.IsChildOf(transform) || transform.IsChildOf(hit.collider.transform);
-            return false;
-        }
-        return false;
-    }
-
-    public bool TryInteract()
-    {
-        ResolveReferences();
-        if (checkoutManager == null || checkoutManager.IsActive || !IsAimedAtThisStation())
-            return false;
-        checkoutManager.EnterCheckout();
-        return checkoutManager.IsActive;
-    }
-
-    void CachePropertyBlocks()
+    private void CacheOriginalAppearance()
     {
         foreach (Renderer r in renderers)
         {
             if (!r) continue;
-            int materialCount = r.sharedMaterials.Length;
-            MaterialPropertyBlock[] saved = new MaterialPropertyBlock[materialCount];
+            Material[] sourceMaterials = r.sharedMaterials;
+            MaterialPropertyBlock[] saved = new MaterialPropertyBlock[sourceMaterials.Length];
 
-            for (int i = 0; i < materialCount; i++)
+            for (int i = 0; i < sourceMaterials.Length; i++)
             {
                 saved[i] = new MaterialPropertyBlock();
                 r.GetPropertyBlock(saved[i], i);
@@ -88,7 +60,61 @@ public class CheckoutStation : MonoBehaviour
         }
     }
 
-    void SetHighlight(bool state)
+    private void ResolveReferences()
+    {
+        if (!checkoutManager) checkoutManager = CheckoutManager.Instance;
+        if (!player) player = FindFirstObjectByType<PlayerMovement>();
+        if (playerCamera == null && player != null && player.playerCamera != null)
+            playerCamera = player.playerCamera.GetComponent<Camera>();
+        if (playerCamera == null) playerCamera = Camera.main;
+    }
+
+    private bool IsAimedAtThisStation()
+    {
+        if (playerCamera == null) return false;
+
+        Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+        int count = Physics.RaycastNonAlloc(ray, hitBuffer, lookDistance, Physics.DefaultRaycastLayers,
+            QueryTriggerInteraction.Ignore);
+
+        int nearestIndex = -1;
+        float nearestDistance = float.MaxValue;
+        for (int i = 0; i < count; i++)
+        {
+            Collider col = hitBuffer[i].collider;
+            if (!col) continue;
+            if (player != null && col.transform.root == player.transform.root) continue;
+
+            if (hitBuffer[i].distance < nearestDistance)
+            {
+                nearestDistance = hitBuffer[i].distance;
+                nearestIndex = i;
+            }
+        }
+
+        bool result = false;
+        if (nearestIndex >= 0)
+        {
+            Transform hitTransform = hitBuffer[nearestIndex].collider.transform;
+            CheckoutStation hitStation = hitTransform.GetComponentInParent<CheckoutStation>();
+            result = hitStation == this;
+        }
+
+        for (int i = 0; i < count; i++) hitBuffer[i] = default;
+        return result;
+    }
+
+    public bool TryInteract()
+    {
+        ResolveReferences();
+        if ((checkoutManager == null) || checkoutManager.IsActive || !IsAimedAtThisStation())
+            return false;
+
+        checkoutManager.EnterCheckout();
+        return checkoutManager.IsActive;
+    }
+
+    private void SetHighlight(bool state)
     {
         if (highlighted == state || renderers == null) return;
         highlighted = state;
@@ -97,35 +123,67 @@ public class CheckoutStation : MonoBehaviour
         {
             if (!r) continue;
 
-            Material[] materials = r.sharedMaterials;
             if (!state)
             {
                 if (originalBlocks.TryGetValue(r, out MaterialPropertyBlock[] saved))
                 {
-                    for (int i = 0; i < materials.Length; i++)
+                    for (int i = 0; i < r.sharedMaterials.Length; i++)
                         r.SetPropertyBlock(i < saved.Length ? saved[i] : null, i);
+                }
+
+                if (runtimeMaterials.TryGetValue(r, out Material[] originals))
+                {
+                    r.materials = originals;
+                    runtimeMaterials.Remove(r);
                 }
                 continue;
             }
 
-            for (int i = 0; i < materials.Length; i++)
+            Material[] instances = r.materials;
+            runtimeMaterials[r] = r.sharedMaterials;
+            for (int i = 0; i < instances.Length; i++)
             {
-                Material material = materials[i];
+                Material material = instances[i];
                 if (!material) continue;
 
+                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", aimedColor);
+                if (material.HasProperty("_Color")) material.SetColor("_Color", aimedColor);
+                if (material.HasProperty("_EmissionColor"))
+                {
+                    material.EnableKeyword("_EMISSION");
+                    material.SetColor("_EmissionColor", aimedColor * emissionStrength);
+                }
+            }
+
+            // Also set a property block so SRP-batched materials receive the tint.
+            for (int i = 0; i < instances.Length; i++)
+            {
+                Material material = instances[i];
+                if (!material) continue;
                 MaterialPropertyBlock block = new MaterialPropertyBlock();
                 r.GetPropertyBlock(block, i);
-
-                if (material.HasProperty("_BaseColor"))
-                    block.SetColor("_BaseColor", aimedColor);
-                if (material.HasProperty("_Color"))
-                    block.SetColor("_Color", aimedColor);
+                if (material.HasProperty("_BaseColor")) block.SetColor("_BaseColor", aimedColor);
+                if (material.HasProperty("_Color")) block.SetColor("_Color", aimedColor);
                 if (material.HasProperty("_EmissionColor"))
-                    block.SetColor("_EmissionColor", aimedColor * 1.2f);
-
+                    block.SetColor("_EmissionColor", aimedColor * emissionStrength);
                 r.SetPropertyBlock(block, i);
             }
         }
     }
-    void OnDisable() { SetHighlight(false); }
+
+    private void OnDisable()
+    {
+        SetHighlight(false);
+    }
+
+    private void OnDestroy()
+    {
+        foreach (var pair in runtimeMaterials)
+        {
+            Material[] instances = pair.Key ? pair.Key.materials : null;
+            if (instances == null) continue;
+            foreach (Material material in instances)
+                if (material) Destroy(material);
+        }
+    }
 }
