@@ -157,7 +157,7 @@ public class ProductBox : MonoBehaviour
         AddWallFrame(halfX, halfY, halfZ, t);
         AddCartonTape(halfX, halfY, halfZ);
         AddCartonDetails(halfX, halfY, halfZ);
-        AddProductImageAcrossFlaps(halfY, t);
+        AddProductImageAcrossFlaps(halfY, t);\n        AddProductImageOnFront(halfZ, t);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
