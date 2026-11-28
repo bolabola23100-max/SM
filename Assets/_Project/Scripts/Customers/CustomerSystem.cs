@@ -68,11 +68,6 @@ public class CustomerSystem : MonoBehaviour
             spawnTimer = spawnInterval;
         }
 
-        for (int i = 0; i < customers.Count; i++)
-        {
-            if (customers[i] != null && customers[i].IsWaiting == false)
-                customers[i].UpdateQueuePosition(GetQueuePosition(customers[i]));
-        }
     }
 
     private void SpawnCustomer()
@@ -140,11 +135,23 @@ public class CustomerSystem : MonoBehaviour
         if (customers.Count == 0) return;
 
         CustomerAgent frontCustomer = customers[0];
-        if (frontCustomer != null)
+        if (frontCustomer != null && frontCustomer.IsWaiting)
+        {
             frontCustomer.LeaveAfterPayment();
+            customers.RemoveAt(0);
+            Debug.Log("[CustomerSystem] Front customer paid and is leaving.");
 
-        customers.Remove(frontCustomer);
-        Debug.Log("[CustomerSystem] Front customer paid and is leaving.");
+            // Move the remaining queue one position forward.
+            for (int i = 0; i < customers.Count; i++)
+            {
+                if (customers[i] != null)
+                    customers[i].MoveForwardInQueue(GetQueuePosition(customers[i]));
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[CustomerSystem] Sale completed, but no customer is waiting at the front of the queue.");
+        }
     }
 
     public void RemoveCustomer(CustomerAgent customer)
