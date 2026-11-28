@@ -33,6 +33,11 @@ public class ProductBox : MonoBehaviour
     [SerializeField] private bool showProductModelsBeforeOpening = false;
     [SerializeField] private bool buildOnAwake = true;
 
+    [Header("Carton Tape")]
+    [SerializeField] private Color tapeColor = new Color(0.94f, 0.94f, 0.90f);
+    [Min(0.005f)][SerializeField] private float tapeWidth = 0.055f;
+    [Min(0.001f)][SerializeField] private float tapeThickness = 0.003f;
+
     [Header("Runtime state")]
     [SerializeField] private bool isOpen;
 
@@ -41,7 +46,7 @@ public class ProductBox : MonoBehaviour
     private Transform leftFlap;
     private Transform rightFlap;
     private Material cartonMaterial;
-    private Material cartonFrameMaterial;
+    private Material cartonFrameMaterial;\n    private Material tapeMaterial;
     private int remainingCount;
     private Vector3 cartonSize;
     private float fittedProductWidth;
@@ -121,7 +126,7 @@ public class ProductBox : MonoBehaviour
         cartonMaterial = new Material(cartonShader);
         cartonMaterial.color = cartonColor;
         cartonFrameMaterial = new Material(cartonMaterial);
-        cartonFrameMaterial.color = cartonFrameColor;
+        cartonFrameMaterial.color = cartonFrameColor;\n        tapeMaterial = new Material(cartonMaterial);\n        tapeMaterial.color = tapeColor;
 
         float halfX = cartonSize.x * 0.5f, halfY = cartonSize.y * 0.5f, halfZ = cartonSize.z * 0.5f;
         float t = wallThickness;
@@ -134,7 +139,7 @@ public class ProductBox : MonoBehaviour
         rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t, -1f);
 
         // Dark, slightly raised cardboard border strips around the four outer walls.
-        AddWallFrame(halfX, halfY, halfZ, t);
+        AddWallFrame(halfX, halfY, halfZ, t);\n        AddCartonTape(halfX, halfY, halfZ);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
@@ -351,6 +356,31 @@ public class ProductBox : MonoBehaviour
             CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(x, 0f, zFront));
             CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(x, 0f, zBack));
         }
+    }
+
+    private void AddCartonTape(float halfX, float halfY, float halfZ)
+    {
+        float tapeW = Mathf.Min(tapeWidth, cartonSize.x * 0.35f);
+        // Tape runs centered over the carton top and down both end faces.
+        CreateTapeSegment(new Vector3(tapeW, tapeThickness, cartonSize.z),
+            new Vector3(0f, halfY + tapeThickness * 0.5f, 0f));
+        CreateTapeSegment(new Vector3(tapeW, cartonSize.y, tapeThickness),
+            new Vector3(0f, 0f, halfZ + tapeThickness * 0.5f));
+        CreateTapeSegment(new Vector3(tapeW, cartonSize.y, tapeThickness),
+            new Vector3(0f, 0f, -halfZ - tapeThickness * 0.5f));
+    }
+
+    private void CreateTapeSegment(Vector3 size, Vector3 localPosition)
+    {
+        GameObject tape = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        tape.name = "WhiteCartonTape";
+        tape.transform.SetParent(visualRoot, false);
+        tape.transform.localPosition = localPosition;
+        tape.transform.localScale = size;
+        Collider col = tape.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        Renderer rend = tape.GetComponent<Renderer>();
+        if (rend != null && tapeMaterial != null) rend.sharedMaterial = tapeMaterial;
     }
 
     private void CreateTrimBar(Vector3 size, Vector3 localPosition)
