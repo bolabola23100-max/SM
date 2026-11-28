@@ -35,7 +35,10 @@ public class CustomerSystem : MonoBehaviour
     private void Start()
     {
         spawnPoint = GameObject.Find("CustomerSpawnPoint")?.transform;
+        // Prefer the dedicated queue marker. Support the existing scene spelling too.
         queuePoint = GameObject.Find("CustomerQueuePoint")?.transform;
+        if (queuePoint == null) queuePoint = GameObject.Find("CustommerQueuePint")?.transform;
+        if (queuePoint == null) queuePoint = GameObject.Find("CustomerQueuePint")?.transform;
         if (queuePoint == null) queuePoint = GameObject.Find("CheckoutPoint")?.transform;
         exitPoint = GameObject.Find("CustomerExitPoint")?.transform;
 
