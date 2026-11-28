@@ -167,10 +167,10 @@ public class CustomerAgent : MonoBehaviour
         SetDestination(owner.GetQueuePosition(this));
     }
 
-    public void UpdateQueuePosition(Vector3 position)
+    public void MoveForwardInQueue(Vector3 position)
     {
-        if (state != State.Waiting && state != State.GoingToQueue) return;
-        if (state == State.Waiting) return;
+        if (state == State.Leaving) return;
+        state = State.GoingToQueue;
         SetDestination(position);
     }
 
