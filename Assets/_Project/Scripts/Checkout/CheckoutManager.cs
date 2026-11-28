@@ -426,12 +426,7 @@ public class CheckoutManager : MonoBehaviour
             new Vector2(14f, -177f), new Vector2(312f, 18f), TextAlignmentOptions.Left);
         statusText.color = new Color(0.72f, 0.79f, 0.85f);
 
-        CreateActionButton("PayButton", salesPanel.transform, "PAY NOW",
-            new Vector2(14f, -198f), new Vector2(150f, 28f),
-            new Color(0.08f, 0.52f, 0.34f), CompleteSale);
-        CreateActionButton("ClearButton", salesPanel.transform, "CLEAR",
-            new Vector2(176f, -198f), new Vector2(150f, 28f),
-            new Color(0.25f, 0.30f, 0.36f), ClearScannedProducts);
+        // The monitor is display-only for now. Payment and clear controls will live on the external HUD.
 
         salesCanvas.SetActive(false);
     }
