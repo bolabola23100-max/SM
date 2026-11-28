@@ -66,6 +66,18 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
 
     public void OnPointerDown(PointerEventData eventData)
     {
+        // In checkout mode the same button is a scanner. It must still work
+        // even if furniture/carton references are not assigned on this button.
+        if (CheckoutManager.Instance != null && CheckoutManager.Instance.IsActive)
+        {
+            isPressing = true;
+            holdTriggered = false;
+            startedWhileHoldingShelf = false;
+            targetShelf = null;
+            SetProgress(0f);
+            return;
+        }
+
         if (playerCamera == null || productInteraction == null || furnitureController == null)
             return;
 
@@ -75,9 +87,6 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
         startedWhileHoldingShelf = furnitureController.IsHoldingShelf;
         targetShelf = null;
         SetProgress(0f);
-
-        if (CheckoutManager.Instance != null && CheckoutManager.Instance.IsActive)
-            return;
 
         if (startedWhileHoldingShelf || productInteraction.IsHoldingProduct)
             return;
