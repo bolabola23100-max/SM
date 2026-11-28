@@ -28,6 +28,8 @@ public class ProductBox : MonoBehaviour
 
     [Header("Appearance")]
     [SerializeField] private Color cartonColor = new Color(0.62f, 0.40f, 0.22f);
+    [SerializeField] private Color cartonFrameColor = new Color(0.30f, 0.16f, 0.08f);
+    [Min(0.005f)][SerializeField] private float frameWidth = 0.025f;
     [SerializeField] private bool showProductModelsBeforeOpening = false;
     [SerializeField] private bool buildOnAwake = true;
 
@@ -39,6 +41,7 @@ public class ProductBox : MonoBehaviour
     private Transform leftFlap;
     private Transform rightFlap;
     private Material cartonMaterial;
+    private Material cartonFrameMaterial;
     private int remainingCount;
     private Vector3 cartonSize;
     private float fittedProductWidth;
@@ -117,6 +120,8 @@ public class ProductBox : MonoBehaviour
         }
         cartonMaterial = new Material(cartonShader);
         cartonMaterial.color = cartonColor;
+        cartonFrameMaterial = new Material(cartonMaterial);
+        cartonFrameMaterial.color = cartonFrameColor;
 
         float halfX = cartonSize.x * 0.5f, halfY = cartonSize.y * 0.5f, halfZ = cartonSize.z * 0.5f;
         float t = wallThickness;
@@ -127,6 +132,9 @@ public class ProductBox : MonoBehaviour
         AddPanel("Right", new Vector3(t, cartonSize.y, cartonSize.z - 2f * t), new Vector3(halfX - t * 0.5f, 0f, 0f));
         leftFlap = CreateFlap("LeftFlap", -halfX, halfY, cartonSize.x * 0.5f, t, 1f);
         rightFlap = CreateFlap("RightFlap", halfX, halfY, cartonSize.x * 0.5f, t, -1f);
+
+        // Dark, slightly raised cardboard border strips around the four outer walls.
+        AddWallFrame(halfX, halfY, halfZ, t);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
@@ -315,6 +323,47 @@ public class ProductBox : MonoBehaviour
         panel.name = panelName; panel.transform.SetParent(visualRoot, false);
         panel.transform.localPosition = localPosition; panel.transform.localScale = size;
         ApplyCartonMaterial(panel);
+    }
+
+    private void AddWallFrame(float halfX, float halfY, float halfZ, float wallT)
+    {
+        float w = Mathf.Min(frameWidth, cartonSize.x * 0.08f);
+        float yBottom = -halfY + w * 0.5f;
+        float yTop = halfY - w * 0.5f;
+        float zFront = halfZ + w * 0.15f;
+        float zBack = -halfZ - w * 0.15f;
+        float xLeft = -halfX - w * 0.15f;
+        float xRight = halfX + w * 0.15f;
+
+        // Front and back face frames: horizontal top/bottom and vertical sides.
+        foreach (float z in new float[] { zFront, zBack })
+        {
+            CreateTrimBar(new Vector3(cartonSize.x, w, w), new Vector3(0f, yTop, z));
+            CreateTrimBar(new Vector3(cartonSize.x, w, w), new Vector3(0f, yBottom, z));
+            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(xLeft, 0f, z));
+            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(xRight, 0f, z));
+        }
+        // Side face frames, with top and bottom strips and front/back vertical edges.
+        foreach (float x in new float[] { xLeft, xRight })
+        {
+            CreateTrimBar(new Vector3(w, w, cartonSize.z), new Vector3(x, yTop, 0f));
+            CreateTrimBar(new Vector3(w, w, cartonSize.z), new Vector3(x, yBottom, 0f));
+            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(x, 0f, zFront));
+            CreateTrimBar(new Vector3(w, cartonSize.y, w), new Vector3(x, 0f, zBack));
+        }
+    }
+
+    private void CreateTrimBar(Vector3 size, Vector3 localPosition)
+    {
+        GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bar.name = "DarkCartonFrame";
+        bar.transform.SetParent(visualRoot, false);
+        bar.transform.localPosition = localPosition;
+        bar.transform.localScale = size;
+        Collider col = bar.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        Renderer rend = bar.GetComponent<Renderer>();
+        if (rend != null && cartonFrameMaterial != null) rend.sharedMaterial = cartonFrameMaterial;
     }
 
     private void ApplyCartonMaterial(GameObject panel)
