@@ -378,13 +378,9 @@ public class ProductBox : MonoBehaviour
     private void AddCartonTape(float halfX, float halfY, float halfZ)
     {
         float tapeW = Mathf.Min(tapeWidth, cartonSize.x * 0.35f);
-        // Tape runs centered over the carton top and down both end faces.
-        CreateTapeSegment(new Vector3(tapeW, tapeThickness, cartonSize.z),
+        // A single strip is placed only on the upper surface; it does not wrap down the sides.
+        CreateTapeSegment(new Vector3(tapeW, tapeThickness, cartonSize.z * 0.92f),
             new Vector3(0f, halfY + tapeThickness * 0.5f, 0f));
-        CreateTapeSegment(new Vector3(tapeW, cartonSize.y, tapeThickness),
-            new Vector3(0f, 0f, halfZ + tapeThickness * 0.5f));
-        CreateTapeSegment(new Vector3(tapeW, cartonSize.y, tapeThickness),
-            new Vector3(0f, 0f, -halfZ - tapeThickness * 0.5f));
     }
 
     private void CreateTapeSegment(Vector3 size, Vector3 localPosition)
