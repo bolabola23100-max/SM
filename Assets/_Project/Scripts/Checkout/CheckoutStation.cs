@@ -23,13 +23,7 @@ public class CheckoutStation : MonoBehaviour
         if (checkoutManager != null && checkoutManager.IsActive) { SetHighlight(false); return; }
         bool aimed = IsAimedAtThisStation();
         SetHighlight(aimed);
-        bool key = Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame;
-        bool touch = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;
-        if (aimed && (key || touch))
-        {
-            if (checkoutManager != null) checkoutManager.EnterCheckout();
-            else Debug.LogError("[CheckoutStation] CheckoutManager not found.", this);
-        }
+
     }
 
     void ResolveReferences()
@@ -46,7 +40,7 @@ public class CheckoutStation : MonoBehaviour
         return false;
     }
 
-    bool IsAimedAtThisStation()
+    public bool IsAimedAtThisStation()
     {
         if (playerCamera == null) return false;
         RaycastHit[] hits = Physics.RaycastAll(new Ray(playerCamera.transform.position, playerCamera.transform.forward), lookDistance, ~0, QueryTriggerInteraction.Collide);
@@ -61,6 +55,15 @@ public class CheckoutStation : MonoBehaviour
             return false;
         }
         return false;
+    }
+
+    public bool TryInteract()
+    {
+        ResolveReferences();
+        if (checkoutManager == null || checkoutManager.IsActive || !IsAimedAtThisStation())
+            return false;
+        checkoutManager.EnterCheckout();
+        return checkoutManager.IsActive;
     }
 
     void CacheColors()
