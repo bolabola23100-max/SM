@@ -47,7 +47,7 @@ public class CustomerAgent : MonoBehaviour
         navAgent.acceleration = 8f;
         navAgent.radius = 0.28f;
         navAgent.height = 1.8f;
-        navAgent.obstacleAvoidanceType = ObstacleAvoidanceType.MedQuality;
+        navAgent.obstacleAvoidanceType = ObstacleAvoidanceType.MedQualityObstacleAvoidance;
 
         NavMeshHit hit;
         if (NavMesh.SamplePosition(spawnPosition, out hit, 2f, NavMesh.AllAreas))
