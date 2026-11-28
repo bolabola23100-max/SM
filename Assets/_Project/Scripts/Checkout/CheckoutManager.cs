@@ -275,6 +275,10 @@ public class CheckoutManager : MonoBehaviour
 
         float price = Mathf.Max(0f, product.MarketPrice);
         scannedProducts.Add(product, new ScannedProduct { item = product, price = price });
+
+        // Remove the scanned item from the belt queue immediately; the next waiting
+        // product advances into the freed slot before the next interaction.
+        CustomerSystem.Instance?.NotifyProductScanned(product);
         MoveScannedProductToBaggingPoint(product);
         SetStatus("Scanned: " + product.ProductName);
         RefreshSalesUI();
@@ -408,12 +412,24 @@ public class CheckoutManager : MonoBehaviour
             return;
         }
 
+        // Record the payment exactly once before clearing the cart.
         money.AddRevenue(finalTotal, "Checkout sale (" + soldCount + " items)", "Sale");
         if (finalTotal < originalTotal)
             money.GiveDiscount(originalTotal, finalTotal, "Customer discount");
 
+        List<ProductItem> soldProducts = new List<ProductItem>();
+        foreach (ScannedProduct entry in scannedProducts.Values)
+            if (entry.item != null) soldProducts.Add(entry.item);
+
         scannedProducts.Clear();
-        CustomerSystem.Instance?.NotifySaleCompleted(frontCustomerProductWasScanned);
+        customerSystem?.NotifySaleCompleted(frontCustomerProductWasScanned);
+
+        // Sold goods are removed after the customer has been released from the queue,
+        // so no old bagging products can be mistaken for the next customer's goods.
+        foreach (ProductItem soldProduct in soldProducts)
+            if (soldProduct != null) Destroy(soldProduct.gameObject);
+
+        baggedProductCount = 0;
         SetStatus("Payment successful. Received " + finalTotal.ToString("0.00") + ".");
         RefreshSalesUI();
         Debug.Log("[CheckoutManager] Sale completed. Items: " + soldCount + ", total: " + finalTotal);
