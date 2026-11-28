@@ -16,6 +16,7 @@ TagManager:
   - ShelfFloor
   - ShelfWall
   - ShelfZone
+  - Checkout
   layers:
   - Default
   - TransparentFX
