@@ -58,7 +58,7 @@ public class CustomerAgent : MonoBehaviour
 
         ShelfZone firstShelf = owner.GetRandomStockedShelf();
         if (firstShelf != null) GoToShelf(firstShelf);
-        else GoToQueue();
+        else LeaveWithoutPurchase();
     }
 
     private void Update()
@@ -69,8 +69,8 @@ public class CustomerAgent : MonoBehaviour
         {
             if (state == State.GoingToShelf)
             {
-                TryTakeOneProduct();
-                GoToQueue();
+                if (TryTakeOneProduct()) GoToQueue();
+                else LeaveWithoutPurchase();
             }
             else if (state == State.GoingToQueue)
             {
@@ -135,9 +135,9 @@ public class CustomerAgent : MonoBehaviour
         SetDestination(target);
     }
 
-    private void TryTakeOneProduct()
+    private bool TryTakeOneProduct()
     {
-        if (currentShelf == null || currentShelf.Products == null) return;
+        if (currentShelf == null || currentShelf.Products == null) return false;
 
         foreach (Transform productTransform in currentShelf.Products)
         {
@@ -163,8 +163,15 @@ public class CustomerAgent : MonoBehaviour
             item.transform.SetParent(carryPoint, false);
             item.transform.localPosition = Vector3.zero;
             item.transform.localRotation = Quaternion.identity;
-            return;
+            return true;
         }
+        return false;
+    }
+
+    private void LeaveWithoutPurchase()
+    {
+        state = State.Leaving;
+        SetDestination(owner.GetExitPosition());
     }
 
     private void GoToQueue()
