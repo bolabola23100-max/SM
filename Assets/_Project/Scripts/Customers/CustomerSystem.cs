@@ -89,6 +89,12 @@ public class CustomerSystem : MonoBehaviour
         Debug.Log("[CustomerSystem] Temporary customer spawned.");
     }
 
+    public int GetRandomProductCount()
+    {
+        // Inclusive range: each customer randomly wants between one and four items.
+        return Random.Range(1, 5);
+    }
+
     public ShelfZone GetRandomStockedShelf()
     {
         ShelfZone[] zones = FindObjectsOfType<ShelfZone>();
@@ -146,13 +152,26 @@ public class CustomerSystem : MonoBehaviour
     {
         if (item == null || customers.Count == 0) return false;
         CustomerAgent front = customers[0];
-        return front != null && front.IsWaitingAtScanner && front.ConveyorProduct == item;
+        return front != null && front.IsWaitingAtScanner && front.ConveyorProducts.Contains(item);
     }
 
-    public void NotifySaleCompleted(bool frontCustomerProductWasScanned)
+    public bool AreAllFrontCustomerProductsScanned(ICollection<ProductItem> scannedItems)
+    {
+        if (customers.Count == 0 || scannedItems == null) return false;
+        CustomerAgent front = customers[0];
+        if (front == null || !front.IsWaitingAtScanner || front.ConveyorProducts.Count == 0) return false;
+
+        foreach (ProductItem product in front.ConveyorProducts)
+            if (product != null && !scannedItems.Contains(product))
+                return false;
+
+        return true;
+    }
+
+    public void NotifySaleCompleted(bool frontCustomerProductsWereScanned)
     {
         customers.RemoveAll(customer => customer == null);
-        if (!frontCustomerProductWasScanned || customers.Count == 0)
+        if (!frontCustomerProductsWereScanned || customers.Count == 0)
         {
             Debug.Log("[CustomerSystem] Sale did not include the front customer's conveyor product; queue unchanged.");
             return;
