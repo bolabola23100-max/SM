@@ -324,6 +324,13 @@ public class CheckoutManager : MonoBehaviour
         if (salesCanvas != null) return;
 
         ResolveReferences();
+        // First use the Inspector reference; if it was not assigned, find the exact point name in the scene.
+        if (checkoutScreenPoint == null)
+        {
+            GameObject namedPoint = GameObject.Find("CheckoutUI_Point");
+            if (namedPoint != null) checkoutScreenPoint = namedPoint.transform;
+        }
+
         Transform monitorSurface = checkoutScreenPoint != null
             ? checkoutScreenPoint
             : (computerInteraction != null ? computerInteraction.screenSurface : null);
