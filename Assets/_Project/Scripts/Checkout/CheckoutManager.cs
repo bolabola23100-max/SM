@@ -297,6 +297,20 @@ public class CheckoutManager : MonoBehaviour
             return;
         }
 
+        bool frontCustomerProductWasScanned = false;
+        CustomerSystem customerSystem = CustomerSystem.Instance;
+        if (customerSystem != null)
+        {
+            foreach (ScannedProduct entry in scannedProducts.Values)
+            {
+                if (entry.item != null && customerSystem.IsFrontCustomerProduct(entry.item))
+                {
+                    frontCustomerProductWasScanned = true;
+                    break;
+                }
+            }
+        }
+
         float originalTotal = GetCartTotal();
         float finalTotal = money.ApplyCustomerDiscount(originalTotal);
         int soldCount = 0;
@@ -326,7 +340,7 @@ public class CheckoutManager : MonoBehaviour
             money.GiveDiscount(originalTotal, finalTotal, "Customer discount");
 
         scannedProducts.Clear();
-        CustomerSystem.Instance?.NotifySaleCompleted();
+        CustomerSystem.Instance?.NotifySaleCompleted(frontCustomerProductWasScanned);
         SetStatus("Payment successful. Received " + finalTotal.ToString("0.00") + ".");
         RefreshSalesUI();
         Debug.Log("[CheckoutManager] Sale completed. Items: " + soldCount + ", total: " + finalTotal);
