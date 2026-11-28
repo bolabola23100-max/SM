@@ -47,8 +47,7 @@ public class CheckoutStation : MonoBehaviour
         if (playerCamera == null) playerCamera = Camera.main;
     }
 
-    bool IsAimed()
-    {
+    bool IsCheckoutTagged(Transform target)\n    {\n        // The Checkout tag may be placed on the root or any collider child.\n        Transform current = target;\n        while (current != null)\n        {\n            if (current.CompareTag("Checkout")) return true;\n            current = current.parent;\n        }\n        return false;\n    }\n\n    bool IsAimed()\n    {
         if (playerCamera == null) return false;
         Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
         RaycastHit[] hits = Physics.RaycastAll(ray, lookDistance, ~0, QueryTriggerInteraction.Collide);
@@ -56,7 +55,7 @@ public class CheckoutStation : MonoBehaviour
         foreach (RaycastHit hit in hits)
         {
             CheckoutStation station = hit.collider.GetComponentInParent<CheckoutStation>();
-            if (station == this) return true;
+            if (station == this || IsCheckoutTagged(hit.collider.transform)) return true;
             // Ignore player colliders; other obstacles block targeting.
             if (player != null && hit.collider.transform.root == player.transform.root) continue;
             return false;
