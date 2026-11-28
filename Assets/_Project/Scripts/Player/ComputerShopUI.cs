@@ -307,9 +307,9 @@ public class ComputerShopUI : MonoBehaviour
         CreateButton(pageRoot, "MY ORDERS", new Vector2(0.375f, 0.835f), new Vector2(0.53f, 0.90f),
             new Color(0.85f, 0.89f, 0.92f), ink, () => ShowPage("Orders"));
 
-        cartCountLabel = CreateText(pageRoot, "", 24, FontStyle.Bold,
-            new Vector2(0.55f, 0.835f), new Vector2(0.75f, 0.90f),
-            TextAnchor.MiddleLeft, green);
+        cartCountLabel = CreateText(pageRoot, "0 / 50", 22, FontStyle.Bold,
+            new Vector2(0.205f, 0.775f), new Vector2(0.36f, 0.83f),
+            TextAnchor.MiddleCenter, green);
 
         contentArea = CreatePanel(pageRoot, "PageContent",
             new Vector2(0.5f, 0.47f), Vector2.zero, new Vector2(panelSize.x * 0.93f, panelSize.y * 0.65f),
@@ -475,7 +475,7 @@ public class ComputerShopUI : MonoBehaviour
 
     private void ChangeSelectedQuantity(ProductData data, int delta)
     {
-        selectedQuantities[data] = Mathf.Clamp(selectedQuantities[data] + delta, 1, 99);
+        selectedQuantities[data] = Mathf.Clamp(selectedQuantities[data] + delta, 1, 10);
         if (selectedQuantityLabels.TryGetValue(data, out Text label) && label != null)
             label.text = selectedQuantities[data].ToString();
     }
@@ -483,9 +483,25 @@ public class ComputerShopUI : MonoBehaviour
     private void AddToCart(ProductData data)
     {
         int amount = selectedQuantities.TryGetValue(data, out int value) ? value : 1;
-        cart[data] = (cart.TryGetValue(data, out int old) ? old : 0) + amount;
+        int alreadyForProduct = cart.TryGetValue(data, out int old) ? old : 0;
+        int currentTotal = GetCartCartonCount();
+        int allowedForProduct = Mathf.Max(0, 10 - alreadyForProduct);
+        int allowedOverall = Mathf.Max(0, 50 - currentTotal);
+        int accepted = Mathf.Min(amount, allowedForProduct, allowedOverall);
+
+        if (accepted <= 0)
+        {
+            SetStatus(alreadyForProduct >= 10
+                ? "MAXIMUM 10 CARTONS PER PRODUCT."
+                : "CART LIMIT REACHED: 50 CARTONS.");
+            return;
+        }
+
+        cart[data] = alreadyForProduct + accepted;
         RefreshHeader();
-        SetStatus("ADDED " + amount + " CARTON(S) OF " + data.productName + " TO CART.");
+        SetStatus(accepted < amount
+            ? "ADDED " + accepted + ". LIMITS: 10 PER PRODUCT / 50 TOTAL."
+            : "ADDED " + accepted + " CARTON(S) OF " + data.productName + " TO CART.");
     }
 
     private void BuildCartPage()
@@ -552,7 +568,12 @@ public class ComputerShopUI : MonoBehaviour
         if (amount <= 0)
             cart.Remove(data);
         else
-            cart[data] = Mathf.Min(99, amount);
+        {
+            int otherCartons = GetCartCartonCount() - cart[data];
+            amount = Mathf.Min(amount, 10, Mathf.Max(0, 50 - otherCartons));
+            if (amount <= 0) cart.Remove(data);
+            else cart[data] = amount;
+        }
 
         ShowPage("Cart");
     }
@@ -696,6 +717,14 @@ public class ComputerShopUI : MonoBehaviour
         SetStatus("ORDER CONFIRMED. " + (rawTotal > total ? "SUPPLIER DISCOUNT APPLIED. " : "") + "CARTONS SENT TO THE DELIVERY POINT.");
     }
 
+    private int GetCartCartonCount()
+    {
+        int count = 0;
+        foreach (int value in cart.Values)
+            count += value;
+        return count;
+    }
+
     private float CalculateCartTotal()
     {
         float total = 0f;
@@ -712,10 +741,7 @@ public class ComputerShopUI : MonoBehaviour
 
         if (cartCountLabel != null)
         {
-            int count = 0;
-            foreach (int value in cart.Values)
-                count += value;
-            cartCountLabel.text = "CARTONS IN CART: " + count;
+            cartCountLabel.text = GetCartCartonCount() + " / 50";
         }
     }
 
