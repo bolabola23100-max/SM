@@ -26,12 +26,10 @@ public class ShelfPlacement : MonoBehaviour
     private sealed class ProductPose { public Transform product; public Vector3 localPosition; public Quaternion localRotation; public Rigidbody body; public bool wasKinematic; public bool usedGravity; }
     private readonly List<ProductPose> heldProducts = new List<ProductPose>();
 
+    [SerializeField, Min(0.001f)] private float outlineWidth = 0.025f;
     private Renderer[] shelfRenderers;
-    private Material[][] originalMaterials;
-    private Material[][] previewMaterials;
-
-    private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-    private static readonly int ColorId = Shader.PropertyToID("_Color");
+    private readonly List<LineRenderer> outlineLines = new List<LineRenderer>(12);
+    private Material outlineMaterial;
 
     private void Awake()
     {
@@ -42,13 +40,8 @@ public class ShelfPlacement : MonoBehaviour
             rb.useGravity = false;
         }
 
-        // Cache renderers only. Preview materials are created lazily when the
-        // shelf is actually picked up, avoiding startup allocations for every shelf.
+        // Keep the original materials untouched. A separate outline indicates placement validity.
         shelfRenderers = GetComponentsInChildren<Renderer>(true);
-        originalMaterials = new Material[shelfRenderers.Length][];
-        previewMaterials = null;
-        for (int i = 0; i < shelfRenderers.Length; i++)
-            originalMaterials[i] = shelfRenderers[i] != null ? shelfRenderers[i].sharedMaterials : null;
     }
 
     private void Update()
@@ -91,7 +84,7 @@ public class ShelfPlacement : MonoBehaviour
             rb.useGravity = false;
         }
 
-        EnsurePreviewMaterials();
+        CreateOutlineIfNeeded();
         ApplyPlacementPreview(false);
     }
 
@@ -108,7 +101,7 @@ public class ShelfPlacement : MonoBehaviour
         RestoreProductPhysics();
         heldProducts.Clear();
         isHeld = false;
-        RestoreOriginalAppearance();
+        SetOutlineVisible(false);
 
         if (rb != null)
         {
@@ -127,7 +120,7 @@ public class ShelfPlacement : MonoBehaviour
         heldProducts.Clear();
         isHeld = false;
         canPlace = false;
-        RestoreOriginalAppearance();
+        SetOutlineVisible(false);
     }
 
     public void SetPlacementValidity(bool valid)
@@ -137,73 +130,92 @@ public class ShelfPlacement : MonoBehaviour
         if (isHeld) ApplyPlacementPreview(valid);
     }
 
-    private void EnsurePreviewMaterials()
+    private void CreateOutlineIfNeeded()
     {
-        if (previewMaterials != null) return;
-        previewMaterials = new Material[shelfRenderers.Length][];
-        for (int i = 0; i < shelfRenderers.Length; i++)
+        if (outlineLines.Count > 0) return;
+        Bounds bounds = GetCombinedLocalBounds();
+        Vector3 min = bounds.min, max = bounds.max;
+        Vector3[] p =
         {
-            Material[] source = originalMaterials[i];
-            previewMaterials[i] = source != null ? new Material[source.Length] : new Material[0];
-            for (int j = 0; j < previewMaterials[i].Length; j++)
-                if (source[j] != null) previewMaterials[i][j] = CreatePreviewMaterial(source[j]);
+            new Vector3(min.x,min.y,min.z), new Vector3(max.x,min.y,min.z),
+            new Vector3(max.x,min.y,max.z), new Vector3(min.x,min.y,max.z),
+            new Vector3(min.x,max.y,min.z), new Vector3(max.x,max.y,min.z),
+            new Vector3(max.x,max.y,max.z), new Vector3(min.x,max.y,max.z)
+        };
+        int[,] e = { {0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7} };
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
+        if (shader == null) return;
+        outlineMaterial = new Material(shader) { name = "Furniture Placement Outline" };
+        outlineMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Overlay;
+        for (int i=0;i<12;i++)
+        {
+            GameObject edge = new GameObject("Placement Outline Edge");
+            edge.transform.SetParent(transform,false);
+            LineRenderer line = edge.AddComponent<LineRenderer>();
+            line.useWorldSpace = false;
+            line.positionCount = 2;
+            line.SetPosition(0,p[e[i,0]]);
+            line.SetPosition(1,p[e[i,1]]);
+            line.startWidth = outlineWidth;
+            line.endWidth = outlineWidth;
+            line.sharedMaterial = outlineMaterial;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.enabled = false;
+            outlineLines.Add(line);
         }
+    }
+
+    private Bounds GetCombinedLocalBounds()
+    {
+        Bounds result = new Bounds(Vector3.zero,Vector3.one);
+        bool found = false;
+        foreach (Renderer renderer in shelfRenderers)
+        {
+            if (renderer == null || !renderer.enabled) continue;
+            Bounds b = renderer.bounds;
+            for (int i=0;i<8;i++)
+            {
+                Vector3 world = new Vector3((i&1)==0?b.min.x:b.max.x,(i&2)==0?b.min.y:b.max.y,(i&4)==0?b.min.z:b.max.z);
+                Vector3 local = transform.InverseTransformPoint(world);
+                if (!found) { result = new Bounds(local,Vector3.zero); found = true; }
+                else result.Encapsulate(local);
+            }
+        }
+        if (!found) result = new Bounds(Vector3.zero,Vector3.one);
+        result.Expand(outlineWidth*2f);
+        return result;
     }
 
     private void ApplyPlacementPreview(bool valid)
     {
-        Color tint = valid ? validColor : invalidColor;
-        tint.a = 1f;
-
-        for (int i = 0; i < shelfRenderers.Length; i++)
+        if (outlineLines.Count == 0) CreateOutlineIfNeeded();
+        Color color = valid ? validColor : invalidColor;
+        color.a = 1f;
+        if (outlineMaterial != null)
         {
-            Renderer r = shelfRenderers[i];
-            if (r == null) continue;
-
-            r.sharedMaterials = previewMaterials[i];
-            for (int j = 0; j < previewMaterials[i].Length; j++)
-            {
-                Material m = previewMaterials[i][j];
-                if (m == null) continue;
-
-                if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, tint);
-                if (m.HasProperty(ColorId)) m.SetColor(ColorId, tint);
-            }
+            if (outlineMaterial.HasProperty("_BaseColor")) outlineMaterial.SetColor("_BaseColor",color);
+            if (outlineMaterial.HasProperty("_Color")) outlineMaterial.SetColor("_Color",color);
+        }
+        foreach (LineRenderer line in outlineLines)
+        {
+            if (line == null) continue;
+            line.startColor = color;
+            line.endColor = color;
+            line.enabled = true;
         }
     }
 
-    private void RestoreOriginalAppearance()
+    private void SetOutlineVisible(bool visible)
     {
-        for (int i = 0; i < shelfRenderers.Length; i++)
-            if (shelfRenderers[i] != null)
-                shelfRenderers[i].sharedMaterials = originalMaterials[i];
-    }
-
-    private static Material CreatePreviewMaterial(Material original)
-    {
-        // Unlit preview keeps the green/red color vivid regardless of scene lighting.
-        Shader previewShader =
-            Shader.Find("Universal Render Pipeline/Unlit") ??
-            Shader.Find("Unlit/Color") ??
-            Shader.Find("Sprites/Default");
-
-        Material preview = previewShader != null ? new Material(previewShader) : new Material(original);
-        preview.name = "Shelf Placement Preview";
-        preview.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Geometry;
-        return preview;
+        foreach (LineRenderer line in outlineLines)
+            if (line != null) line.enabled = visible;
     }
 
     private void OnDestroy()
     {
-        if (previewMaterials == null) return;
-        foreach (Material[] group in previewMaterials)
-        {
-            if (group == null) continue;
-            foreach (Material material in group)
-                if (material != null) Destroy(material);
-        }
+        if (outlineMaterial != null) Destroy(outlineMaterial);
     }
-
 
     private void CaptureShelfProducts()
     {
