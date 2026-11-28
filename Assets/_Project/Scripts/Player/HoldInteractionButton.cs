@@ -31,6 +31,13 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
 
     private void Update()
     {
+        if (CheckoutManager.Instance != null && CheckoutManager.Instance.IsActive)
+        {
+            targetShelf = null;
+            SetProgress(0f);
+            return;
+        }
+
         if (!isPressing || startedWhileHoldingShelf || targetShelf == null || holdTriggered
             || (productInteraction != null && productInteraction.IsHoldingProduct))
             return;
@@ -48,7 +55,6 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
 
         SetProgress(progress);
 
-        // Pick up automatically when the hold timer finishes; no finger release needed.
         if (progress >= 1f)
         {
             furnitureController.HoldButton();
@@ -70,6 +76,9 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
         targetShelf = null;
         SetProgress(0f);
 
+        if (CheckoutManager.Instance != null && CheckoutManager.Instance.IsActive)
+            return;
+
         if (startedWhileHoldingShelf || productInteraction.IsHoldingProduct)
             return;
 
@@ -84,6 +93,14 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
         isPressing = false;
         SetProgress(0f);
 
+        CheckoutManager checkout = CheckoutManager.Instance;
+        if (checkout != null && checkout.IsActive)
+        {
+            checkout.TryScanAimedProduct();
+            targetShelf = null;
+            return;
+        }
+
         if (holdTriggered)
         {
             targetShelf = null;
@@ -92,29 +109,24 @@ public class HoldInteractionButton : MonoBehaviour, IPointerDownHandler, IPointe
 
         targetShelf = null;
 
-        // When carrying a shelf, a tap confirms its placement.
         if (startedWhileHoldingShelf)
         {
             furnitureController.HoldButton();
             return;
         }
 
-        // While carrying a carton, a tap only opens it. It never drops or places it.
         if (productInteraction.IsHoldingProduct)
         {
             productInteraction.Interact();
             return;
         }
 
-        // Checkout is entered ONLY through this Interact Button, never by tapping the cashier.
         if (checkoutStation != null && checkoutStation.TryInteract())
             return;
 
-        // A computer is entered/exited with the same InteractButton.
         if (computerInteraction != null && computerInteraction.TryInteract())
             return;
 
-        // A box is picked up with a normal tap. Shelf pickup still requires a long press.
         if (IsBoxUnderAim())
             productInteraction.Interact();
     }
