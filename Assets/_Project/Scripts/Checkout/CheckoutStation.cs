@@ -32,7 +32,8 @@ public class CheckoutStation : MonoBehaviour
         bool aimed = IsAimed();
         SetHighlight(aimed);
         bool keyboardActivate = Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame;
-        bool touchActivate = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;
+        bool touchActivate = Touchscreen.current != null &&
+            Touchscreen.current.primaryTouch.phase.ReadValue() == UnityEngine.InputSystem.TouchPhase.Began;
         if (aimed && (keyboardActivate || touchActivate))
         {
             if (checkoutManager != null) checkoutManager.EnterCheckout();
