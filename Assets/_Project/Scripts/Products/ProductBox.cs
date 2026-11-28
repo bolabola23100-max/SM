@@ -39,8 +39,6 @@ public class ProductBox : MonoBehaviour
     [Header("Rendering")]
     [Tooltip("Assign a Lit shader (e.g. URP/Lit) so it is included in mobile builds. Shader.Find is only a fallback.")]
     [SerializeField] private Shader cartonShader;
-    [Tooltip("Assign an Unlit shader (e.g. URP/Unlit) for the logo on the flaps.")]
-    [SerializeField] private Shader logoShader;
     [SerializeField] private bool showProductModelsBeforeOpening = false;
     [SerializeField] private bool buildOnAwake = true;
 
@@ -87,7 +85,6 @@ public class ProductBox : MonoBehaviour
     private Coroutine flapAnimation;
 
     // ------------------------------------------------------------------ shared caches (static)
-    private const float LogoLift = 0.0015f;
     private const int SlotCarton = 0, SlotFrame = 1, SlotDetail = 2, SlotLabel = 3;
 
     private struct CartonLayout
@@ -119,10 +116,9 @@ public class ProductBox : MonoBehaviour
         public int[] slotIds;
         public bool hasSprite;
         public Sprite sprite;
-        public Vector3 frontImagePos;
-        public float frontImageScale;
-        public Mesh logoLeft, logoRight;
-        public float logoCenterX;
+        public Mesh flapFrame;          // brown frame (flap-local space)
+        public Vector3 flapImagePos;    // picture position (flap-local space)
+        public float flapImageScale;
     }
 
     private static readonly Dictionary<(EntityId, Vector3), ProductVisual> productCache = new Dictionary<(EntityId, Vector3), ProductVisual>();
@@ -311,18 +307,6 @@ public class ProductBox : MonoBehaviour
         leftFlap = CreateFlap("LeftFlap", new Vector3(-halfX, pivotY, 0f), flapW, flapLen, 1f, matCarton);
         rightFlap = CreateFlap("RightFlap", new Vector3(halfX, pivotY, 0f), flapW, flapLen, -1f, matCarton);
 
-        // Logo halves ride on the flaps, so they follow the animation.
-        if (set.logoLeft != null && set.logoRight != null && sprite != null && sprite.texture != null)
-        {
-            Shader unlit = ResolveLogoShader(litShader);
-            Material logoMat = GetTextureMaterial(unlit, sprite.texture);
-            float y = wallThickness * 0.5f + LogoLift;
-            CreateMeshObject("LogoLeft", leftFlap, set.logoLeft, new[] { logoMat })
-                .transform.localPosition = new Vector3(set.logoCenterX, y, 0f);
-            CreateMeshObject("LogoRight", rightFlap, set.logoRight, new[] { logoMat })
-                .transform.localPosition = new Vector3(-set.logoCenterX, y, 0f);
-        }
-
         // Tape on top of the closed flaps. It disappears when the carton is opened.
         float tapeW = Mathf.Min(tapeWidth, cartonSize.x * 0.35f);
         tapeObject = CreateCube("Tape", visualRoot, matTape,
@@ -330,13 +314,16 @@ public class ProductBox : MonoBehaviour
             new Vector3(0f, halfY + tapeThickness * 0.5f, 0f));
         tapeObject.SetActive(!tapeCut);
 
+        // Framed product picture lying on the left flap (follows the flap when it opens).
         if (set.hasSprite)
         {
-            GameObject img = new GameObject("FrontImage");
-            img.transform.SetParent(visualRoot, false);
-            img.transform.localPosition = set.frontImagePos;
-            img.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-            img.transform.localScale = Vector3.one * set.frontImageScale;
+            CreateMeshObject("ImageFrame", leftFlap, set.flapFrame, new[] { matFrame });
+
+            GameObject img = new GameObject("FlapImage");
+            img.transform.SetParent(leftFlap, false);
+            img.transform.localPosition = set.flapImagePos;
+            img.transform.localRotation = Quaternion.Euler(90f, 180f, 0f);
+            img.transform.localScale = Vector3.one * set.flapImageScale;
             SpriteRenderer sr = img.AddComponent<SpriteRenderer>();
             sr.sprite = set.sprite;
             sr.color = Color.white;
@@ -542,7 +529,7 @@ public class ProductBox : MonoBehaviour
     private VisualSet GetVisualSet(string layoutKey, Sprite sprite)
     {
         string spriteId = sprite != null ? sprite.GetEntityId().ToString() : "none";
-        string key = $"{layoutKey}|{spriteId}|{frameWidth}|{creaseThickness}|{showShippingLabel}";
+        string key = $"{layoutKey}|{spriteId}|{frameWidth}|{creaseThickness}|{showShippingLabel}|{tapeWidth}";
         if (visualCache.TryGetValue(key, out VisualSet cached) && cached.body != null) return cached;
 
         VisualSet set = BuildVisualSet(cartonSize, sprite);
@@ -601,27 +588,43 @@ public class ProductBox : MonoBehaviour
 
         VisualSet set = new VisualSet();
 
-        // Product picture on the front face (framed).
+        // Product picture (framed) on the top-left flap. Coordinates are in the left flap's local space:
+        // x runs from the outer hinge (0) to the carton centre (flapW), z along the carton depth.
         if (sprite != null && sprite.bounds.size.x > 0f && sprite.bounds.size.y > 0f)
         {
             Vector2 sSize = sprite.bounds.size;
-            float scale = Mathf.Min(size.x * 0.20f / sSize.x, size.y * 0.22f / sSize.y);
-            float imgW = sSize.x * scale, imgH = sSize.y * scale;
+            float flapW = size.x * 0.5f;
+            float flapLen = size.z - 0.7f * w;
+            float tapeW = Mathf.Min(tapeWidth, size.x * 0.35f);
             float framePad = Mathf.Max(0.008f, frameWidth * 0.55f);
             float frameT = Mathf.Max(0.006f, frameWidth * 0.35f);
-            Vector3 center = new Vector3(0f, -size.y * 0.08f, halfZ + frameT * 0.5f);
 
-            AddCube(frame, new Vector3(imgW + framePad * 2f, frameT, frameT), center + new Vector3(0f, imgH * 0.5f + framePad, 0f));
-            AddCube(frame, new Vector3(imgW + framePad * 2f, frameT, frameT), center + new Vector3(0f, -imgH * 0.5f - framePad, 0f));
-            AddCube(frame, new Vector3(frameT, imgH + framePad * 2f, frameT), center + new Vector3(-imgW * 0.5f - framePad, 0f, 0f));
-            AddCube(frame, new Vector3(frameT, imgH + framePad * 2f, frameT), center + new Vector3(imgW * 0.5f + framePad, 0f, 0f));
+            float xMin = w + 0.015f;                         // keep clear of the outer edge
+            float xMax = flapW - tapeW * 0.5f - 0.01f;       // keep clear of the tape
+            float regionW = Mathf.Max(0.03f, xMax - xMin);
+            float maxW = Mathf.Max(0.02f, regionW - framePad * 2f);
+            float maxD = Mathf.Max(0.02f, flapLen * 0.62f - framePad * 2f);
+            float scale = Mathf.Min(maxW / sSize.x, maxD / sSize.y);
+            float imgW = sSize.x * scale, imgD = sSize.y * scale;
+
+            float cx = (xMin + xMax) * 0.5f;
+            float topY = t * 0.5f;                           // flap top surface (flap-local)
+            float barY = topY + frameT * 0.5f;
+
+            var fl = new List<CombineInstance>();
+            AddCube(fl, new Vector3(imgW + framePad * 2f, frameT, frameT), new Vector3(cx, barY, imgD * 0.5f + framePad));
+            AddCube(fl, new Vector3(imgW + framePad * 2f, frameT, frameT), new Vector3(cx, barY, -imgD * 0.5f - framePad));
+            AddCube(fl, new Vector3(frameT, frameT, imgD + framePad * 2f), new Vector3(cx - imgW * 0.5f - framePad, barY, 0f));
+            AddCube(fl, new Vector3(frameT, frameT, imgD + framePad * 2f), new Vector3(cx + imgW * 0.5f + framePad, barY, 0f));
+            Mesh fm = new Mesh { name = "FlapImageFrame" };
+            fm.CombineMeshes(fl.ToArray(), true, true);
+            fm.hideFlags = HideFlags.DontUnloadUnusedAsset;
 
             set.hasSprite = true;
             set.sprite = sprite;
-            set.frontImageScale = scale;
-            set.frontImagePos = new Vector3(center.x, center.y, halfZ + 0.001f);
-
-            BuildFlapLogoMeshes(set, sprite, size);
+            set.flapFrame = fm;
+            set.flapImageScale = scale;
+            set.flapImagePos = new Vector3(cx, topY + 0.0015f, 0f);
         }
 
         // Merge everything into one mesh with one submesh per used material slot.
@@ -646,48 +649,6 @@ public class ProductBox : MonoBehaviour
         set.body = body;
         set.slotIds = usedSlots.ToArray();
         return set;
-    }
-
-    private void BuildFlapLogoMeshes(VisualSet set, Sprite sprite, Vector3 size)
-    {
-        if (sprite.texture == null) return;
-
-        Vector2 sSize = sprite.bounds.size;
-        float scale = Mathf.Min(size.x * 0.82f / sSize.x, size.z * 0.70f / sSize.y);
-        float imageW = sSize.x * scale, imageD = sSize.y * scale;
-        float halfW = imageW * 0.5f;
-        float flapW = size.x * 0.5f;
-        set.logoCenterX = flapW - halfW;
-
-        // Use the sprite's real UVs so atlas-packed sprites also work.
-        Vector2[] uvs = sprite.uv;
-        float u0 = float.MaxValue, u1 = float.MinValue, v0 = float.MaxValue, v1 = float.MinValue;
-        foreach (Vector2 uv in uvs)
-        {
-            u0 = Mathf.Min(u0, uv.x); u1 = Mathf.Max(u1, uv.x);
-            v0 = Mathf.Min(v0, uv.y); v1 = Mathf.Max(v1, uv.y);
-        }
-        float uMid = (u0 + u1) * 0.5f;
-
-        set.logoLeft = CreateLogoHalfMesh("CartonLogoLeft", halfW, imageD, u0, uMid, v0, v1);
-        set.logoRight = CreateLogoHalfMesh("CartonLogoRight", halfW, imageD, uMid, u1, v0, v1);
-    }
-
-    private static Mesh CreateLogoHalfMesh(string meshName, float halfWidth, float depth, float u0, float u1, float v0, float v1)
-    {
-        float l = -halfWidth, r = halfWidth, b = -depth * 0.5f, tp = depth * 0.5f;
-        Mesh mesh = new Mesh { name = meshName };
-        mesh.vertices = new[]
-        {
-            new Vector3(l, 0f, b), new Vector3(r, 0f, b),
-            new Vector3(r, 0f, tp), new Vector3(l, 0f, tp)
-        };
-        mesh.uv = new[] { new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1) };
-        mesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
-        mesh.RecalculateNormals();
-        mesh.RecalculateBounds();
-        mesh.hideFlags = HideFlags.DontUnloadUnusedAsset;
-        return mesh;
     }
 
     // ------------------------------------------------------------------ flaps
@@ -782,14 +743,6 @@ public class ProductBox : MonoBehaviour
         return s;
     }
 
-    private Shader ResolveLogoShader(Shader fallback)
-    {
-        if (logoShader != null) return logoShader;
-        Shader s = Shader.Find("Universal Render Pipeline/Unlit");
-        if (s == null) s = Shader.Find("Unlit/Texture");
-        return s != null ? s : fallback;
-    }
-
     private static Material GetColorMaterial(Shader shader, Color color)
     {
         Color32 c = color;
@@ -801,19 +754,6 @@ public class ProductBox : MonoBehaviour
         if (m.HasProperty("_Color")) m.SetColor("_Color", color);
         if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.1f);
         if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.1f);
-        m.hideFlags = HideFlags.DontUnloadUnusedAsset;
-        materialCache[key] = m;
-        return m;
-    }
-
-    private static Material GetTextureMaterial(Shader shader, Texture texture)
-    {
-        string key = $"{shader.name}|t|{texture.GetEntityId()}";
-        if (materialCache.TryGetValue(key, out Material cached) && cached != null) return cached;
-
-        Material m = new Material(shader) { name = "CartonLogo_" + texture.name, enableInstancing = true };
-        m.mainTexture = texture;
-        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", texture);
         m.hideFlags = HideFlags.DontUnloadUnusedAsset;
         materialCache[key] = m;
         return m;
