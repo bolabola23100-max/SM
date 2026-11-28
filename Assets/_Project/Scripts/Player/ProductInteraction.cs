@@ -29,6 +29,9 @@ public class ProductInteraction : MonoBehaviour
 
     private void Update()
     {
+        if (CheckoutManager.Instance != null && CheckoutManager.Instance.IsActive)
+            return;
+
         if (Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
             Interact();
     }
