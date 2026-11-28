@@ -14,6 +14,7 @@ public class CheckoutManager : MonoBehaviour
     public ProductInteraction productInteraction;
     public MobileJoystick mobileJoystick;
     public TouchLook touchLook;
+    public ComputerInteraction computerInteraction;
 
     [Header("Checkout Position & UI")]
     public Transform cashierStandPoint;
@@ -90,6 +91,7 @@ public class CheckoutManager : MonoBehaviour
         if (!productInteraction) productInteraction = FindFirstObjectByType<ProductInteraction>();
         if (!mobileJoystick) mobileJoystick = FindFirstObjectByType<MobileJoystick>();
         if (!touchLook) touchLook = FindFirstObjectByType<TouchLook>();
+        if (!computerInteraction) computerInteraction = FindFirstObjectByType<ComputerInteraction>();
 
         if (playerCamera == null && playerMovement != null && playerMovement.playerCamera != null)
             playerCamera = playerMovement.playerCamera.GetComponent<Camera>();
@@ -319,23 +321,38 @@ public class CheckoutManager : MonoBehaviour
     {
         if (salesCanvas != null) return;
 
-        salesCanvas = new GameObject("CheckoutSalesCanvas",
-            typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        Canvas canvas = salesCanvas.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 60;
+        ResolveReferences();
+        Transform monitorSurface = computerInteraction != null ? computerInteraction.screenSurface : null;
+        if (monitorSurface == null)
+        {
+            Debug.LogError("[CheckoutManager] Computer monitor Screen Surface is not assigned. Checkout screen cannot be displayed.");
+            return;
+        }
 
-        CanvasScaler scaler = salesCanvas.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(800f, 360f);
-        scaler.matchWidthOrHeight = 0.5f;
+        salesCanvas = new GameObject("CheckoutSalesCanvas",
+            typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
+        Canvas canvas = salesCanvas.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.worldCamera = playerCamera != null ? playerCamera : Camera.main;
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = 60;
+        GraphicRaycaster raycaster = salesCanvas.GetComponent<GraphicRaycaster>();
+        raycaster.ignoreReversedGraphics = false;
+        raycaster.blockingObjects = GraphicRaycaster.BlockingObjects.None;
+
+        RectTransform canvasRect = salesCanvas.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = new Vector2(340f, 225f);
+        canvasRect.localScale = Vector3.one * (0.65f / 340f);
+        canvasRect.SetParent(monitorSurface, false);
+        canvasRect.localPosition = Vector3.forward * 0.014f;
+        canvasRect.localRotation = Quaternion.Euler(0f, 180f, 0f);
 
         salesPanel = CreateUIObject("SalesPanel", salesCanvas.transform, typeof(Image));
         RectTransform panelRect = salesPanel.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(0f, 1f);
-        panelRect.anchorMax = new Vector2(0f, 1f);
-        panelRect.pivot = new Vector2(0f, 1f);
-        panelRect.anchoredPosition = new Vector2(18f, -18f);
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.anchoredPosition = Vector2.zero;
         panelRect.sizeDelta = new Vector2(340f, 225f);
         Image panelImage = salesPanel.GetComponent<Image>();
         panelImage.color = new Color(0.035f, 0.055f, 0.075f, 0.94f);
