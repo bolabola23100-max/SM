@@ -144,10 +144,20 @@ public class ProductInteraction : MonoBehaviour
         }
         bodyBuffer.Clear();
 
-        product.transform.rotation = Quaternion.Euler(data.rotation);
+        // Product layout is defined in the ShelfZone's LOCAL X/Z axes.
+        // Using world Bounds here swaps rows/columns whenever the shelf is rotated.
+        BoxCollider zoneCollider = zone.GetComponent<BoxCollider>();
+        if (zoneCollider == null)
+        {
+            Destroy(product);
+            return false;
+        }
+
+        Transform zoneTransform = zone.transform;
+        product.transform.rotation = zoneTransform.rotation * Quaternion.Euler(data.rotation);
+
         Bounds productBounds = GetWorldBounds(product);
         Vector3 visualCenterOffset = productBounds.center - product.transform.position;
-        Bounds zoneBounds = zone.GetComponent<BoxCollider>().bounds;
 
         int index = zone.ProductCount;
         int columns = Mathf.Max(1, data.columns);
@@ -156,16 +166,26 @@ public class ProductInteraction : MonoBehaviour
         int row = (index / columns) % rows;
         int layer = index / (columns * rows);
 
-        float cellWidth = zoneBounds.size.x / columns;
-        float cellDepth = zoneBounds.size.z / rows;
-        float localX = zoneBounds.min.x + cellWidth * (col + 0.5f);
-        float localZ = zoneBounds.min.z + cellDepth * (row + 0.5f);
-        float targetY = zoneBounds.min.y + productBounds.extents.y + placementSurfaceOffset
-            + layer * Mathf.Max(0.01f, data.productHeight);
+        Vector3 zoneSize = zoneCollider.size;
+        Vector3 zoneCenter = zoneCollider.center;
+        float cellWidth = zoneSize.x / columns;
+        float cellDepth = zoneSize.z / rows;
+        float localX = zoneCenter.x - zoneSize.x * 0.5f + cellWidth * (col + 0.5f);
+        float localZ = zoneCenter.z - zoneSize.z * 0.5f + cellDepth * (row + 0.5f);
 
-        Vector3 targetVisualCenter = new Vector3(localX, targetY, localZ) + data.offset;
+        // Convert world vertical clearances into the zone's local space so
+        // rotated/scaled shelf transforms keep the products sitting on the surface.
+        float verticalClearance = productBounds.extents.y + placementSurfaceOffset;
+        float localVerticalClearance = zoneTransform.InverseTransformVector(Vector3.up * verticalClearance).y;
+        float localLayerStep = zoneTransform.InverseTransformVector(
+            Vector3.up * Mathf.Max(0.01f, data.productHeight)).y;
+        float localY = zoneCenter.y - zoneSize.y * 0.5f
+            + localVerticalClearance + layer * localLayerStep;
+
+        Vector3 targetVisualCenter = zoneTransform.TransformPoint(new Vector3(localX, localY, localZ))
+            + zoneTransform.TransformVector(data.offset);
         product.transform.position = targetVisualCenter - visualCenterOffset;
-        product.transform.SetParent(zone.transform, true);
+        product.transform.SetParent(zoneTransform, true);
 
         // Apply the final transform to physics before registering the item.
         if (!zone.RegisterProduct(product.transform))
