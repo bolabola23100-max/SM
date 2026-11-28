@@ -1,10 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>
-/// Spawns temporary capsule customers and manages their simple shopping/checkout queue.
-/// Scene points are found by exact names, so no Inspector wiring is required.
-/// </summary>
 public class CustomerSystem : MonoBehaviour
 {
     public static CustomerSystem Instance { get; private set; }
@@ -17,6 +13,8 @@ public class CustomerSystem : MonoBehaviour
     private Transform spawnPoint;
     private Transform queuePoint;
     private Transform exitPoint;
+    public Transform ScannerPoint { get; private set; }
+
     private readonly List<CustomerAgent> customers = new List<CustomerAgent>();
     private float spawnTimer = 3f;
     private readonly Color[] customerColors =
@@ -30,11 +28,7 @@ public class CustomerSystem : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            Destroy(this);
-            return;
-        }
+        if (Instance != null && Instance != this) { Destroy(this); return; }
         Instance = this;
     }
 
@@ -45,15 +39,23 @@ public class CustomerSystem : MonoBehaviour
         if (queuePoint == null) queuePoint = GameObject.Find("CheckoutPoint")?.transform;
         exitPoint = GameObject.Find("CustomerExitPoint")?.transform;
 
+        // Reuse the existing ScannerPoint. CustomerConveyorPoint is only a fallback.
+        ScannerPoint = GameObject.Find("ScannerPoint")?.transform;
+        if (ScannerPoint == null)
+            ScannerPoint = GameObject.Find("CustomerConveyorPoint")?.transform;
+
         if (spawnPoint == null)
         {
-            Debug.LogError("[CustomerSystem] Create an Empty GameObject named CustomerSpawnPoint outside the store entrance.");
+            Debug.LogError("[CustomerSystem] Create CustomerSpawnPoint outside the store entrance.");
             enabled = false;
             return;
         }
 
+        if (ScannerPoint == null)
+            Debug.LogError("[CustomerSystem] ScannerPoint was not found. Create an Empty named ScannerPoint at the conveyor surface.");
+
         if (queuePoint == null)
-            Debug.LogWarning("[CustomerSystem] CustomerQueuePoint not found yet. Customers will approach the CheckoutManager position until you add the queue point.");
+            Debug.LogWarning("[CustomerSystem] CustomerQueuePoint not found; CheckoutPoint will be used if available.");
 
         spawnTimer = 2f;
     }
@@ -67,7 +69,6 @@ public class CustomerSystem : MonoBehaviour
             SpawnCustomer();
             spawnTimer = spawnInterval;
         }
-
     }
 
     private void SpawnCustomer()
@@ -81,8 +82,7 @@ public class CustomerSystem : MonoBehaviour
 
         CustomerAgent agent = body.AddComponent<CustomerAgent>();
         customers.Add(agent);
-        Color outfit = customerColors[Random.Range(0, customerColors.Length)];
-        agent.Initialize(this, body.transform.position, outfit);
+        agent.Initialize(this, body.transform.position, customerColors[Random.Range(0, customerColors.Length)]);
         Debug.Log("[CustomerSystem] Temporary customer spawned.");
     }
 
@@ -90,15 +90,10 @@ public class CustomerSystem : MonoBehaviour
     {
         ShelfZone[] zones = FindObjectsOfType<ShelfZone>();
         List<ShelfZone> stocked = new List<ShelfZone>();
-
         foreach (ShelfZone zone in zones)
-        {
-            if (zone != null && zone.ProductCount > 0)
-                stocked.Add(zone);
-        }
+            if (zone != null && zone.ProductCount > 0) stocked.Add(zone);
 
-        if (stocked.Count == 0) return null;
-        return stocked[Random.Range(0, stocked.Count)];
+        return stocked.Count == 0 ? null : stocked[Random.Range(0, stocked.Count)];
     }
 
     public Vector3 GetQueuePosition(CustomerAgent customer)
@@ -126,38 +121,56 @@ public class CustomerSystem : MonoBehaviour
 
     public void NotifyCustomerWaiting(CustomerAgent customer)
     {
+        if (customers.Count > 0 && customers[0] == customer)
+            SendFrontCustomerToScanner();
         Debug.Log("[CustomerSystem] Customer reached the checkout queue.");
     }
 
-    public void NotifySaleCompleted()
+    public void NotifyCustomerAtScanner(CustomerAgent customer)
+    {
+        Debug.Log("[CustomerSystem] Front customer is ready for scanning.");
+    }
+
+    private void SendFrontCustomerToScanner()
+    {
+        if (customers.Count == 0 || ScannerPoint == null) return;
+        CustomerAgent front = customers[0];
+        if (front != null && front.IsWaitingInQueue)
+            front.GoToConveyor(ScannerPoint);
+    }
+
+    public bool IsFrontCustomerProduct(ProductItem item)
+    {
+        if (item == null || customers.Count == 0) return false;
+        CustomerAgent front = customers[0];
+        return front != null && front.IsWaitingAtScanner && front.ConveyorProduct == item;
+    }
+
+    public void NotifySaleCompleted(bool frontCustomerProductWasScanned)
     {
         customers.RemoveAll(customer => customer == null);
-        if (customers.Count == 0) return;
+        if (!frontCustomerProductWasScanned || customers.Count == 0)
+        {
+            Debug.Log("[CustomerSystem] Sale did not include the front customer's conveyor product; queue unchanged.");
+            return;
+        }
 
         CustomerAgent frontCustomer = customers[0];
-        if (frontCustomer != null && frontCustomer.IsWaiting)
+        if (frontCustomer != null && frontCustomer.IsWaitingAtScanner)
         {
             frontCustomer.LeaveAfterPayment();
             customers.RemoveAt(0);
             Debug.Log("[CustomerSystem] Front customer paid and is leaving.");
 
-            // Move the remaining queue one position forward.
             for (int i = 0; i < customers.Count; i++)
-            {
                 if (customers[i] != null)
                     customers[i].MoveForwardInQueue(GetQueuePosition(customers[i]));
-            }
-        }
-        else
-        {
-            Debug.LogWarning("[CustomerSystem] Sale completed, but no customer is waiting at the front of the queue.");
+
+            SendFrontCustomerToScanner();
         }
     }
 
-    public void RemoveCustomer(CustomerAgent customer)
-    {
-        customers.Remove(customer);
-    }
+    public void RemoveCustomer(CustomerAgent customer) => customers.Remove(customer);
 
     private void OnDestroy()
     {
