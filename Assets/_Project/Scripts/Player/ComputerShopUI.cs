@@ -43,6 +43,10 @@ public class ComputerShopUI : MonoBehaviour
     [Header("Delivery Layout")]
     [Tooltip("How many cartons per row at the delivery point.")]
     [SerializeField] private int cartonsPerRow = 3;
+    [Min(1)][SerializeField] private int storageCapacity = 100;
+    [Tooltip("Only cartons within this radius of the delivery point count as stored stock.")]
+    [Min(1f)][SerializeField] private float storageRadius = 12f;
+    [SerializeField] private float cartonSpacingY = 0.8f;
     [SerializeField] private float cartonSpacingX = 0.8f;
     [SerializeField] private float cartonSpacingZ = 0.8f;
     [Tooltip("Small lift so cartons never spawn inside the floor.")]
@@ -67,6 +71,7 @@ public class ComputerShopUI : MonoBehaviour
     private RectTransform pageRoot;
     private Text balanceLabel;
     private Text cartCountLabel;
+    private Text storageCountLabel;
     private Text statusLabel;
     private RectTransform contentArea;
     private float balance;
@@ -310,6 +315,9 @@ public class ComputerShopUI : MonoBehaviour
         cartCountLabel = CreateText(pageRoot, "0 / 50", 22, FontStyle.Bold,
             new Vector2(0.205f, 0.775f), new Vector2(0.36f, 0.83f),
             TextAnchor.MiddleCenter, green);
+        storageCountLabel = CreateText(pageRoot, "", 22, FontStyle.Bold,
+            new Vector2(0.55f, 0.775f), new Vector2(0.80f, 0.83f),
+            TextAnchor.MiddleLeft, new Color(0.05f, 0.45f, 0.65f));
 
         contentArea = CreatePanel(pageRoot, "PageContent",
             new Vector2(0.5f, 0.47f), Vector2.zero, new Vector2(panelSize.x * 0.93f, panelSize.y * 0.65f),
@@ -632,6 +640,16 @@ public class ComputerShopUI : MonoBehaviour
             return;
         }
 
+        int storedCartons = CountStoredCartons();
+        int orderCartons = GetCartCartonCount();
+        if (storedCartons + orderCartons > storageCapacity)
+        {
+            SetStatus("STORAGE FULL/INSUFFICIENT SPACE. " + storedCartons + "/" + storageCapacity +
+                " STORED. THIS ORDER NEEDS " + orderCartons + " SPACE.");
+            RefreshHeader();
+            return;
+        }
+
         float rawTotal = CalculateCartTotal();
         MoneyManager money = MoneyManager.Instance;
         float total = money != null ? money.ApplySupplierDiscount(rawTotal) : rawTotal;
@@ -662,7 +680,7 @@ public class ComputerShopUI : MonoBehaviour
             balance = money.Balance;
         }
         else balance -= total;
-        int cartonIndex = 0;
+        int cartonIndex = storedCartons;
         int perRow = Mathf.Max(1, cartonsPerRow);
 
         foreach (KeyValuePair<ProductData, int> entry in cart)
@@ -687,8 +705,8 @@ public class ComputerShopUI : MonoBehaviour
                 // so one stretched carton can not push the next one out of the map.
                 Vector3 position = deliveryPoint.position
                     + deliveryPoint.right * (column * cartonSpacingX)
-                    + deliveryPoint.forward * (row * cartonSpacingZ)
-                    + Vector3.up * spawnLift;
+                    + deliveryPoint.forward * ((row % 10) * cartonSpacingZ)
+                    + Vector3.up * (spawnLift + (row / 10) * cartonSpacingY);
 
                 try
                 {
@@ -717,6 +735,21 @@ public class ComputerShopUI : MonoBehaviour
         SetStatus("ORDER CONFIRMED. " + (rawTotal > total ? "SUPPLIER DISCOUNT APPLIED. " : "") + "CARTONS SENT TO THE DELIVERY POINT.");
     }
 
+    private int CountStoredCartons()
+    {
+        if (deliveryPoint == null) return 0;
+        ProductBox[] cartons = FindObjectsOfType<ProductBox>();
+        int count = 0;
+        float radiusSq = storageRadius * storageRadius;
+        foreach (ProductBox carton in cartons)
+        {
+            if (carton == null) continue;
+            if ((carton.transform.position - deliveryPoint.position).sqrMagnitude <= radiusSq)
+                count++;
+        }
+        return count;
+    }
+
     private int GetCartCartonCount()
     {
         int count = 0;
@@ -742,6 +775,8 @@ public class ComputerShopUI : MonoBehaviour
         if (cartCountLabel != null)
         {
             cartCountLabel.text = GetCartCartonCount() + " / 50";
+            if (storageCountLabel != null)
+                storageCountLabel.text = "STORAGE: " + CountStoredCartons() + " / " + storageCapacity;
         }
     }
 
