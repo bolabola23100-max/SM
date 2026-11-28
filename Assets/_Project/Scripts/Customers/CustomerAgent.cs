@@ -10,7 +10,9 @@ public class CustomerAgent : MonoBehaviour
     private CustomerSystem owner;
     private NavMeshAgent navAgent;
     private Transform carryPoint;
-    private ProductItem carriedProduct;
+    private readonly List<ProductItem> carriedProducts = new List<ProductItem>();
+    private readonly List<ProductItem> conveyorProducts = new List<ProductItem>();
+    private int desiredProductCount = 1;
     private float moveSpeed = 1.35f;
     private float arriveDistance = 0.35f;
     private Vector3 directTarget;
@@ -18,7 +20,7 @@ public class CustomerAgent : MonoBehaviour
 
     public bool IsWaitingAtScanner => state == State.WaitingAtScanner;
     public bool IsWaitingInQueue => state == State.WaitingInQueue;
-    public ProductItem ConveyorProduct { get; private set; }
+    public IReadOnlyList<ProductItem> ConveyorProducts => conveyorProducts;
 
     public void Initialize(CustomerSystem system, Vector3 spawnPosition, Color outfitColor)
     {
@@ -56,6 +58,7 @@ public class CustomerAgent : MonoBehaviour
         }
         else navAgent.enabled = false;
 
+        desiredProductCount = owner.GetRandomProductCount();
         ShelfZone firstShelf = owner.GetRandomStockedShelf();
         if (firstShelf != null) GoToShelf(firstShelf);
         else LeaveWithoutPurchase();
@@ -69,7 +72,14 @@ public class CustomerAgent : MonoBehaviour
         {
             if (state == State.GoingToShelf)
             {
-                if (TryTakeOneProduct()) GoToQueue();
+                if (TryTakeOneProduct())
+                {
+                    // Keep shopping until this customer's random basket size is reached.
+                    ShelfZone nextShelf = carriedProducts.Count < desiredProductCount ? owner.GetRandomStockedShelf() : null;
+                    if (nextShelf != null) GoToShelf(nextShelf);
+                    else GoToQueue();
+                }
+                else if (carriedProducts.Count > 0) GoToQueue();
                 else LeaveWithoutPurchase();
             }
             else if (state == State.GoingToQueue)
@@ -146,7 +156,7 @@ public class CustomerAgent : MonoBehaviour
             if (item == null || item.Data == null) continue;
 
             currentShelf.UnregisterProduct(productTransform);
-            carriedProduct = item;
+            carriedProducts.Add(item);
 
             Rigidbody body = item.GetComponent<Rigidbody>();
             if (body != null)
@@ -169,7 +179,8 @@ public class CustomerAgent : MonoBehaviour
                 SafeScaleDivide(originalWorldScale.x, parentScale.x),
                 SafeScaleDivide(originalWorldScale.y, parentScale.y),
                 SafeScaleDivide(originalWorldScale.z, parentScale.z));
-            item.transform.localPosition = Vector3.zero;
+            int carryIndex = carriedProducts.Count - 1;
+            item.transform.localPosition = new Vector3((carryIndex % 2) * 0.22f, (carryIndex / 2) * 0.18f, 0f);
             item.transform.localRotation = Quaternion.identity;
             return true;
         }
@@ -209,38 +220,51 @@ public class CustomerAgent : MonoBehaviour
 
     private void PlaceProductOnConveyor()
     {
-        if (carriedProduct == null || owner.ScannerPoint == null)
+        if (carriedProducts.Count == 0 || owner.ScannerPoint == null)
         {
-            Debug.LogWarning("[CustomerAgent] Customer reached ScannerPoint without a product or scanner point.");
+            Debug.LogWarning("[CustomerAgent] Customer reached ScannerPoint without products or scanner point.");
             return;
         }
 
-        Transform itemTransform = carriedProduct.transform;
-        itemTransform.SetParent(null, true);
-        itemTransform.SetPositionAndRotation(owner.ScannerPoint.position, owner.ScannerPoint.rotation);
-
-        Collider[] colliders = carriedProduct.GetComponentsInChildren<Collider>();
-        foreach (Collider itemCollider in colliders) itemCollider.enabled = true;
-
-        Rigidbody body = carriedProduct.GetComponent<Rigidbody>();
-        if (body != null)
+        conveyorProducts.Clear();
+        for (int i = 0; i < carriedProducts.Count; i++)
         {
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
-            body.useGravity = false;
-            body.isKinematic = true;
+            ProductItem product = carriedProducts[i];
+            if (product == null) continue;
+
+            Transform itemTransform = product.transform;
+            itemTransform.SetParent(null, true);
+            // Arrange the basket in a short row beside the scanner so every item can be targeted.
+            float sideOffset = (i - (carriedProducts.Count - 1) * 0.5f) * 0.32f;
+            itemTransform.SetPositionAndRotation(
+                owner.ScannerPoint.position + owner.ScannerPoint.right * sideOffset,
+                owner.ScannerPoint.rotation);
+
+            Collider[] colliders = product.GetComponentsInChildren<Collider>();
+            foreach (Collider itemCollider in colliders) itemCollider.enabled = true;
+
+            Rigidbody body = product.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+                body.useGravity = false;
+                body.isKinematic = true;
+            }
+
+            conveyorProducts.Add(product);
         }
 
-        ConveyorProduct = carriedProduct;
-        carriedProduct = null;
-        Debug.Log("[CustomerAgent] Customer placed product at ScannerPoint.");
+        carriedProducts.Clear();
+        Debug.Log("[CustomerAgent] Customer placed " + conveyorProducts.Count + " products at ScannerPoint.");
     }
 
     public void LeaveAfterPayment()
     {
         if (state == State.Leaving) return;
         state = State.Leaving;
-        ConveyorProduct = null;
+        conveyorProducts.Clear();
+        carriedProducts.Clear();
         SetDestination(owner.GetExitPosition());
     }
 }
