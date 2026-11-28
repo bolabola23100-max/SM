@@ -157,7 +157,7 @@ public class ProductBox : MonoBehaviour
         AddWallFrame(halfX, halfY, halfZ, t);
         AddCartonTape(halfX, halfY, halfZ);
         AddCartonDetails(halfX, halfY, halfZ);
-        AddProductImageOnCarton(halfX, halfY, halfZ);
+        AddProductImageAcrossFlaps(halfY, t);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
@@ -417,27 +417,66 @@ public class ProductBox : MonoBehaviour
         }
     }
 
-    private void AddProductImageOnCarton(float halfX, float halfY, float halfZ)
+    private void AddProductImageAcrossFlaps(float halfY, float flapThickness)
     {
-        if (productData == null || productData.productIcon == null) return;
-
-        GameObject imageObject = new GameObject("CartonProductImage");
-        imageObject.transform.SetParent(visualRoot, false);
-        imageObject.transform.localPosition = new Vector3(0f, 0f, halfZ + wallThickness * 0.5f + 0.004f);
-        imageObject.transform.localRotation = Quaternion.identity;
-
-        SpriteRenderer spriteRenderer = imageObject.AddComponent<SpriteRenderer>();
-        spriteRenderer.sprite = productData.productIcon;
-        spriteRenderer.color = Color.white;
-        spriteRenderer.sortingOrder = 2;
-
-        // Fit the sprite proportionally into a centered area on the front carton face.
-        float maxWidth = cartonSize.x * 0.48f;
-        float maxHeight = cartonSize.y * 0.48f;
-        Vector2 spriteSize = productData.productIcon.bounds.size;
+        if (productData == null || productData.productIcon == null || leftFlap == null || rightFlap == null) return;
+        Sprite sprite = productData.productIcon;
+        float maxWidth = cartonSize.x * 0.82f;
+        float maxDepth = cartonSize.z * 0.70f;
+        Vector2 spriteSize = sprite.bounds.size;
         if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
-        float fit = Mathf.Min(maxWidth / spriteSize.x, maxHeight / spriteSize.y);
-        imageObject.transform.localScale = Vector3.one * fit;
+        float scale = Mathf.Min(maxWidth / spriteSize.x, maxDepth / spriteSize.y);
+        float imageW = spriteSize.x * scale;
+        float imageD = spriteSize.y * scale;
+        float flapW = cartonSize.x * 0.5f;
+        float imageHalfW = imageW * 0.5f;
+
+        // Each image half is attached to its own flap, so it follows the flap animation.
+        CreateFlapImageHalf(leftFlap, sprite, true, imageHalfW, imageD, flapW, scale, flapThickness);
+        CreateFlapImageHalf(rightFlap, sprite, false, imageHalfW, imageD, flapW, scale, flapThickness);
+    }
+
+    private void CreateFlapImageHalf(Transform flap, Sprite sprite, bool leftHalf, float halfImageWidth,
+        float imageDepth, float flapWidth, float scale, float flapThickness)
+    {
+        GameObject image = new GameObject(leftHalf ? "CartonLogoLeftHalf" : "CartonLogoRightHalf");
+        image.transform.SetParent(flap, false);
+        // The flaps pivot on opposite outer edges and extend inward; place the sliced image accordingly.
+        float direction = leftHalf ? 1f : -1f;
+        float imageCenterX = direction * (flapWidth - halfImageWidth);
+        image.transform.localPosition = new Vector3(imageCenterX, flapThickness * 0.5f + 0.002f, 0f);
+        image.transform.localRotation = Quaternion.identity;
+
+        Mesh mesh = new Mesh();
+        mesh.name = "CartonLogoHalfMesh";
+        float left = -halfImageWidth, right = halfImageWidth;
+        float bottom = -imageDepth * 0.5f, top = imageDepth * 0.5f;
+        mesh.vertices = new Vector3[] {
+            new Vector3(left, 0f, bottom), new Vector3(right, 0f, bottom),
+            new Vector3(right, 0f, top), new Vector3(left, 0f, top)
+        };
+        Rect rect = sprite.textureRect;
+        float u0 = rect.x / sprite.texture.width, u1 = rect.xMax / sprite.texture.width;
+        float v0 = rect.y / sprite.texture.height, v1 = rect.yMax / sprite.texture.height;
+        float umid = (u0 + u1) * 0.5f;
+        mesh.uv = leftHalf
+            ? new Vector2[] { new Vector2(u0,v0), new Vector2(umid,v0), new Vector2(umid,v1), new Vector2(u0,v1) }
+            : new Vector2[] { new Vector2(umid,v0), new Vector2(u1,v0), new Vector2(u1,v1), new Vector2(umid,v1) };
+        mesh.triangles = new int[] { 0,2,1, 0,3,2 };
+        mesh.RecalculateNormals();
+
+        MeshFilter mf = image.AddComponent<MeshFilter>();
+        mf.sharedMesh = mesh;
+        MeshRenderer mr = image.AddComponent<MeshRenderer>();
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null) shader = Shader.Find("Unlit/Texture");
+        if (shader != null)
+        {
+            Material mat = new Material(shader);
+            mat.mainTexture = sprite.texture;
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", sprite.texture);
+            mr.sharedMaterial = mat;
+        }
     }
 
     private void CreateDetailBar(Vector3 size, Vector3 localPosition)
