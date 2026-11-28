@@ -157,6 +157,7 @@ public class ProductBox : MonoBehaviour
         AddWallFrame(halfX, halfY, halfZ, t);
         AddCartonTape(halfX, halfY, halfZ);
         AddCartonDetails(halfX, halfY, halfZ);
+        AddProductImageOnCarton(halfX, halfY, halfZ);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
@@ -414,6 +415,29 @@ public class ProductBox : MonoBehaviour
             CreateLabelPatch(new Vector3(labelW, labelH, seam * 2f),
                 new Vector3(halfX * 0.42f, halfY * 0.28f, halfZ + wallThickness * 0.5f + seam));
         }
+    }
+
+    private void AddProductImageOnCarton(float halfX, float halfY, float halfZ)
+    {
+        if (productData == null || productData.productIcon == null) return;
+
+        GameObject imageObject = new GameObject("CartonProductImage");
+        imageObject.transform.SetParent(visualRoot, false);
+        imageObject.transform.localPosition = new Vector3(0f, 0f, halfZ + wallThickness * 0.5f + 0.004f);
+        imageObject.transform.localRotation = Quaternion.identity;
+
+        SpriteRenderer spriteRenderer = imageObject.AddComponent<SpriteRenderer>();
+        spriteRenderer.sprite = productData.productIcon;
+        spriteRenderer.color = Color.white;
+        spriteRenderer.sortingOrder = 2;
+
+        // Fit the sprite proportionally into a centered area on the front carton face.
+        float maxWidth = cartonSize.x * 0.48f;
+        float maxHeight = cartonSize.y * 0.48f;
+        Vector2 spriteSize = productData.productIcon.bounds.size;
+        if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
+        float fit = Mathf.Min(maxWidth / spriteSize.x, maxHeight / spriteSize.y);
+        imageObject.transform.localScale = Vector3.one * fit;
     }
 
     private void CreateDetailBar(Vector3 size, Vector3 localPosition)
