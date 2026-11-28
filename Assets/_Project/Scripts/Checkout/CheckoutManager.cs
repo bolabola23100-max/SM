@@ -15,6 +15,8 @@ public class CheckoutManager : MonoBehaviour
     public MobileJoystick mobileJoystick;
     public TouchLook touchLook;
     public ComputerInteraction computerInteraction;
+    [Tooltip("Place this Transform exactly on the cashier monitor where the checkout UI should appear.")]
+    public Transform checkoutScreenPoint;
 
     [Header("Checkout Position & UI")]
     public Transform cashierStandPoint;
@@ -322,10 +324,12 @@ public class CheckoutManager : MonoBehaviour
         if (salesCanvas != null) return;
 
         ResolveReferences();
-        Transform monitorSurface = computerInteraction != null ? computerInteraction.screenSurface : null;
+        Transform monitorSurface = checkoutScreenPoint != null
+            ? checkoutScreenPoint
+            : (computerInteraction != null ? computerInteraction.screenSurface : null);
         if (monitorSurface == null)
         {
-            Debug.LogError("[CheckoutManager] Computer monitor Screen Surface is not assigned. Checkout screen cannot be displayed.");
+            Debug.LogError("[CheckoutManager] Assign Checkout Screen Point on CheckoutManager (or the computer Screen Surface).");
             return;
         }
 
@@ -344,8 +348,8 @@ public class CheckoutManager : MonoBehaviour
         canvasRect.sizeDelta = new Vector2(340f, 225f);
         canvasRect.localScale = Vector3.one * (0.65f / 340f);
         canvasRect.SetParent(monitorSurface, false);
-        canvasRect.localPosition = Vector3.forward * 0.014f;
-        canvasRect.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        canvasRect.localPosition = Vector3.zero;
+        canvasRect.localRotation = Quaternion.identity;
 
         salesPanel = CreateUIObject("SalesPanel", salesCanvas.transform, typeof(Image));
         RectTransform panelRect = salesPanel.GetComponent<RectTransform>();
