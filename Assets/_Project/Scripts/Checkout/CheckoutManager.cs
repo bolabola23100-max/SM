@@ -83,7 +83,7 @@ public class CheckoutManager : MonoBehaviour
             mobileJoystick.ResetInput();
             mobileJoystick.enabled = false; // disables joystick input, not its UI GameObject
         }
-        if (touchLook) touchLook.enabled = true; // keep camera touch-look working
+        if (touchLook) touchLook.enabled = touchLookWasEnabled; // keep camera touch-look working
 
         if (cashierStandPoint)
         {
@@ -106,10 +106,10 @@ public class CheckoutManager : MonoBehaviour
         active = false;
 
         if (playerMovement) playerMovement.MovementLocked = false;
-        if (productInteraction) productInteraction.enabled = true;
+        if (productInteraction) productInteraction.enabled = interactionWasEnabled;
         if (mobileJoystick)
         {
-            mobileJoystick.enabled = true;
+            mobileJoystick.enabled = joystickWasEnabled;
             mobileJoystick.ResetInput();
         }
         if (touchLook) touchLook.enabled = true;
