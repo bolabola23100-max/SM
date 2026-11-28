@@ -58,6 +58,10 @@ public class CheckoutManager : MonoBehaviour
     {
         ResolveReferences();
 
+        // Customer flow is created automatically beside the checkout manager.
+        if (GetComponent<CustomerSystem>() == null)
+            gameObject.AddComponent<CustomerSystem>();
+
         if (!cashierStandPoint)
         {
             GameObject point = GameObject.Find("CheckoutPoint");
@@ -322,6 +326,7 @@ public class CheckoutManager : MonoBehaviour
             money.GiveDiscount(originalTotal, finalTotal, "Customer discount");
 
         scannedProducts.Clear();
+        CustomerSystem.Instance?.NotifySaleCompleted();
         SetStatus("Payment successful. Received " + finalTotal.ToString("0.00") + ".");
         RefreshSalesUI();
         Debug.Log("[CheckoutManager] Sale completed. Items: " + soldCount + ", total: " + finalTotal);
