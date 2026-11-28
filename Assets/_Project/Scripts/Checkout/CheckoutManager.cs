@@ -74,6 +74,10 @@ public class CheckoutManager : MonoBehaviour
         if (!playerMovement) { Debug.LogError("[CheckoutManager] PlayerMovement not found."); return; }
         if (!characterController) characterController = playerMovement.GetComponent<CharacterController>();
 
+        interactionWasEnabled = productInteraction != null && productInteraction.enabled;
+        joystickWasEnabled = mobileJoystick != null && mobileJoystick.enabled;
+        touchLookWasEnabled = touchLook != null && touchLook.enabled;
+
         active = true;
         playerMovement.MovementLocked = true;
 
@@ -112,7 +116,7 @@ public class CheckoutManager : MonoBehaviour
             mobileJoystick.enabled = joystickWasEnabled;
             mobileJoystick.ResetInput();
         }
-        if (touchLook) touchLook.enabled = true;
+        if (touchLook) touchLook.enabled = touchLookWasEnabled;
         if (exitButton) exitButton.SetActive(false);
 
         Cursor.lockState = CursorLockMode.Locked;
