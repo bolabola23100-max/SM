@@ -23,7 +23,7 @@ public class PlayerMovement : MonoBehaviour
     private float verticalVelocity;
     private float cameraRotationX;
 
-    private bool jumpRequested;
+    private bool jumpRequested;\n\n    [HideInInspector] public bool MovementLocked;
 
     void Start()
     {
