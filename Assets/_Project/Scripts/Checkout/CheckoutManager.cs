@@ -309,6 +309,20 @@ public class CheckoutManager : MonoBehaviour
                     break;
                 }
             }
+
+            // Do not let the customer leave until every item in their basket was scanned.
+            if (frontCustomerProductWasScanned &&
+                !customerSystem.AreAllFrontCustomerProductsScanned(new List<ProductItem>(scannedProducts.Keys)))
+            {
+                SetStatus("Scan all products from this customer before payment.");
+                return;
+            }
+
+            if (!frontCustomerProductWasScanned)
+            {
+                SetStatus("Scan the front customer's products at the scanner.");
+                return;
+            }
         }
 
         float originalTotal = GetCartTotal();
