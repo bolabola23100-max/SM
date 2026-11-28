@@ -359,7 +359,7 @@ public class CheckoutManager : MonoBehaviour
         panelRect.anchoredPosition = Vector2.zero;
         panelRect.sizeDelta = new Vector2(340f, 225f);
         Image panelImage = salesPanel.GetComponent<Image>();
-        panelImage.color = new Color(0.035f, 0.055f, 0.075f, 0.94f);
+        panelImage.color = new Color(0.02f, 0.28f, 0.78f, 0.98f);
 
         headerText = CreateText("Header", salesPanel.transform, "CHECKOUT", 18, FontStyles.Bold,
             new Vector2(14f, -10f), new Vector2(312f, 25f), TextAlignmentOptions.Left);
