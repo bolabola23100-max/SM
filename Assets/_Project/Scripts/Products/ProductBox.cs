@@ -157,7 +157,8 @@ public class ProductBox : MonoBehaviour
         AddWallFrame(halfX, halfY, halfZ, t);
         AddCartonTape(halfX, halfY, halfZ);
         AddCartonDetails(halfX, halfY, halfZ);
-        AddProductImageAcrossFlaps(halfY, t);\n        AddProductImageOnFront(halfZ, t);
+        AddProductImageAcrossFlaps(halfY, t);
+        AddProductImageOnFront(halfZ, t);
 
         BoxCollider boxCollider = GetComponent<BoxCollider>();
         boxCollider.center = Vector3.zero;
@@ -415,6 +416,46 @@ public class ProductBox : MonoBehaviour
             CreateLabelPatch(new Vector3(labelW, labelH, seam * 2f),
                 new Vector3(halfX * 0.42f, halfY * 0.28f, halfZ + wallThickness * 0.5f + seam));
         }
+    }
+
+    private void AddProductImageOnFront(float halfZ, float thickness)
+    {
+        if (productData == null || productData.productIcon == null) return;
+
+        Sprite sprite = productData.productIcon;
+        Vector2 spriteSize = sprite.bounds.size;
+        if (spriteSize.x <= 0f || spriteSize.y <= 0f) return;
+
+        float maxWidth = cartonSize.x * 0.20f;
+        float maxHeight = cartonSize.y * 0.22f;
+        float scale = Mathf.Min(maxWidth / spriteSize.x, maxHeight / spriteSize.y);
+        float imageWidth = spriteSize.x * scale;
+        float imageHeight = spriteSize.y * scale;
+        float framePadding = Mathf.Max(0.008f, frameWidth * 0.55f);
+        float frameThickness = Mathf.Max(0.006f, frameWidth * 0.35f);
+        Vector3 center = new Vector3(0f, -cartonSize.y * 0.08f,
+            halfZ + thickness * 0.5f + frameThickness * 0.5f + 0.003f);
+
+        // Four dark-brown bars form a compact frame around the product picture.
+        CreateTrimBar(new Vector3(imageWidth + framePadding * 2f, frameThickness, frameThickness),
+            center + new Vector3(0f, imageHeight * 0.5f + framePadding, 0f));
+        CreateTrimBar(new Vector3(imageWidth + framePadding * 2f, frameThickness, frameThickness),
+            center + new Vector3(0f, -imageHeight * 0.5f - framePadding, 0f));
+        CreateTrimBar(new Vector3(frameThickness, imageHeight + framePadding * 2f, frameThickness),
+            center + new Vector3(-imageWidth * 0.5f - framePadding, 0f, 0f));
+        CreateTrimBar(new Vector3(frameThickness, imageHeight + framePadding * 2f, frameThickness),
+            center + new Vector3(imageWidth * 0.5f + framePadding, 0f, 0f));
+
+        GameObject imageObject = new GameObject("SmallProductImageInFrame");
+        imageObject.transform.SetParent(visualRoot, false);
+        imageObject.transform.localPosition = center + new Vector3(0f, 0f, frameThickness * 0.5f + 0.002f);
+        imageObject.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+        imageObject.transform.localScale = Vector3.one * scale;
+
+        SpriteRenderer imageRenderer = imageObject.AddComponent<SpriteRenderer>();
+        imageRenderer.sprite = sprite;
+        imageRenderer.color = Color.white;
+        imageRenderer.sortingOrder = 5;
     }
 
     private void AddProductImageAcrossFlaps(float halfY, float flapThickness)
