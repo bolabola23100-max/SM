@@ -29,7 +29,7 @@ public class CheckoutManager : MonoBehaviour
     private Button exitUnityButton;
     private Camera playerCamera;
 
-    private readonly Dictionary<int, ScannedProduct> scannedProducts = new Dictionary<int, ScannedProduct>();
+    private readonly Dictionary<ProductItem, ScannedProduct> scannedProducts = new Dictionary<ProductItem, ScannedProduct>();
     private GameObject salesCanvas;
     private GameObject salesPanel;
     private TMP_Text headerText;
@@ -210,15 +210,14 @@ public class CheckoutManager : MonoBehaviour
             return false;
         }
 
-        int id = product.GetInstanceID();
-        if (scannedProducts.ContainsKey(id))
+        if (scannedProducts.ContainsKey(product))
         {
             SetStatus("This product is already scanned.");
             return false;
         }
 
         float price = Mathf.Max(0f, product.MarketPrice);
-        scannedProducts.Add(id, new ScannedProduct { item = product, price = price });
+        scannedProducts.Add(product, new ScannedProduct { item = product, price = price });
         SetStatus("Scanned: " + product.ProductName);
         RefreshSalesUI();
         return true;
@@ -392,7 +391,6 @@ public class CheckoutManager : MonoBehaviour
         text.fontStyle = style;
         text.alignment = alignment;
         text.color = Color.white;
-        text.enableWordWrapping = true;
         text.raycastTarget = false;
         return text;
     }
