@@ -31,7 +31,7 @@ public class CheckoutStation : MonoBehaviour
 
         bool aimed = IsAimed();
         SetHighlight(aimed);
-        if (aimed && Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame)
+        bool keyboardActivate = Keyboard.current != null && Keyboard.current.eKey.wasPressedThisFrame;\n        bool touchActivate = Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame;\n        if (aimed && (keyboardActivate || touchActivate))
         {
             if (checkoutManager != null) checkoutManager.EnterCheckout();
             else Debug.LogError("[CheckoutStation] CheckoutManager not found.", this);
